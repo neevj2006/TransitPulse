@@ -19,11 +19,11 @@ Git integration.
 
 `NEXT_PUBLIC_APP_ENV` is configured independently:
 
-| Environment | Value |
-| --- | --- |
+| Environment | Value         |
+| ----------- | ------------- |
 | Development | `development` |
-| Preview | `preview` |
-| Production | `production` |
+| Preview     | `preview`     |
+| Production  | `production`  |
 
 Local development defaults are documented in `apps/web/.env.example`.
 Credentials and private values must never be committed. Preview and production
