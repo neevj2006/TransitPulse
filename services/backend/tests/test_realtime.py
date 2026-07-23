@@ -121,8 +121,9 @@ async def test_poller_opens_a_bounded_circuit_after_repeated_failures(tmp_path: 
         FeedConfig("vehicles", "https://example.test/feed"), RawSnapshotStore(tmp_path)
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        for _ in range(3):
-            result, _ = await poller.poll(client)
+        await poller.poll(client)
+        await poller.poll(client)
+        result, _ = await poller.poll(client)
         opened, _ = await poller.poll(client)
     assert result.outcome == "ERROR"
     assert poller.health.circuit_open_until is not None
