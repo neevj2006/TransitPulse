@@ -1,6 +1,6 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportAttributeAccessIssue=false
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -21,7 +21,7 @@ from transitpulse.realtime import (
     parse_vehicle_positions,
 )
 from transitpulse.reconciliation import reconcile_vehicle
-from transitpulse.schedule.models import Schedule
+from transitpulse.schedule.models import Schedule, Service, Stop, StopTime, Trip
 
 
 def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
@@ -215,6 +215,31 @@ async def test_live_arrivals_are_scoped_to_the_requested_stop() -> None:
         response = await client.get("/api/v1/live/stops/target/arrivals")
     assert response.status_code == 200
     assert response.json()["data"][0]["stop_id"] == "target"
+
+
+async def test_live_arrivals_explicitly_fall_back_to_schedule() -> None:
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
+    app.state.schedule = Schedule(
+        "test",
+        "checksum",
+        stops={"stop": Stop("stop", "Stop", 42.0, -71.0)},
+        trips={"trip": Trip("trip", "Red", "daily", None, None)},
+        stop_times=[StopTime("trip", "stop", 1, 3600, 3600)],
+        services={
+            "daily": Service(
+                "daily",
+                (True, True, True, True, True, True, True),
+                date(2020, 1, 1),
+                date(2030, 1, 1),
+            )
+        },
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/live/stops/stop/arrivals")
+    assert response.status_code == 200, response.json()
+    assert response.json()["data"][0]["scheduled_fallback"]["kind"] == "scheduled_fallback"
 
 
 def test_event_broker_scopes_and_replays_monotonic_events() -> None:
