@@ -5,6 +5,8 @@ from pathlib import Path
 import httpx
 from google.transit import gtfs_realtime_pb2
 
+from transitpulse.app import create_app
+from transitpulse.config import Settings
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
@@ -76,3 +78,16 @@ async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path
     assert payload == b"payload"
     assert list(tmp_path.rglob("*.pb.gz"))  # noqa: ASYNC240
     assert "TransitPulse" in seen["user-agent"]
+
+
+async def test_live_vehicle_response_has_freshness() -> None:
+    app = create_app(Settings(environment="test"), probes=[])
+    app.state.current_state.update_vehicles(
+        [Vehicle("entity", "bus", "Red", None, 42.0, -71.0, datetime.now(UTC))]
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/live/routes/Red/vehicles")
+    assert response.status_code == 200
+    assert response.json()["data"][0]["freshness"]["state"] == "HEALTHY"

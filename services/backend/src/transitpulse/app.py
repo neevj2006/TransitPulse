@@ -8,6 +8,7 @@ from transitpulse.cache import RedisProbe
 from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
 from transitpulse.health import Probe, router
+from transitpulse.live_api import router as live_router
 from transitpulse.logging import configure_logging
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.api import router as schedule_router
@@ -49,4 +50,5 @@ def create_app(
     app.state.current_state = CurrentState()
     app.include_router(router)
     app.include_router(schedule_router)
+    app.include_router(live_router)
     return app
