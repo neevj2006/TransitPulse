@@ -7,6 +7,7 @@ from google.transit import gtfs_realtime_pb2
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
+from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
@@ -91,3 +92,11 @@ async def test_live_vehicle_response_has_freshness() -> None:
         response = await client.get("/api/v1/live/routes/Red/vehicles")
     assert response.status_code == 200
     assert response.json()["data"][0]["freshness"]["state"] == "HEALTHY"
+
+
+def test_event_broker_scopes_and_replays_monotonic_events() -> None:
+    broker = EventBroker()
+    broker.publish("vehicle.changed", '{"schema_version":"1.0.0"}', route_id="Red")
+    broker.publish("vehicle.changed", '{"schema_version":"1.0.0"}', route_id="Orange")
+    assert [event.event_id for event in broker.since(0, "Red", None)] == [1]
+    assert broker.since(1, "Red", None) == []
