@@ -34,6 +34,18 @@ async def persist_and_activate(
                 "retrieved": datetime.now(UTC),
             },
         )
+        for agency in schedule.agencies.values():
+            await connection.execute(
+                text(
+                    "INSERT INTO agencies (feed_version_id, agency_id, name, timezone) VALUES (:version, :id, :name, :timezone)"
+                ),
+                {
+                    "version": version_id,
+                    "id": agency.agency_id,
+                    "name": agency.name,
+                    "timezone": agency.timezone,
+                },
+            )
         for route in schedule.routes.values():
             await connection.execute(
                 text(
@@ -94,6 +106,18 @@ async def persist_and_activate(
                     "headsign": trip.headsign,
                 },
             )
+        for (service_id, service_date), is_added in schedule.exceptions.items():
+            await connection.execute(
+                text(
+                    "INSERT INTO service_exceptions (feed_version_id, service_id, service_date, is_added) VALUES (:version, :service, :date, :added)"
+                ),
+                {
+                    "version": version_id,
+                    "service": service_id,
+                    "date": service_date,
+                    "added": is_added,
+                },
+            )
         for stop_time in schedule.stop_times:
             await connection.execute(
                 text(
@@ -122,6 +146,19 @@ async def persist_and_activate(
                         "lon": longitude,
                     },
                 )
+        for transfer in schedule.transfers:
+            await connection.execute(
+                text(
+                    "INSERT INTO transfers (feed_version_id, from_stop_id, to_stop_id, transfer_type, minimum_transfer_seconds) VALUES (:version, :from_stop, :to_stop, :type, :minimum)"
+                ),
+                {
+                    "version": version_id,
+                    "from_stop": transfer.from_stop_id,
+                    "to_stop": transfer.to_stop_id,
+                    "type": transfer.transfer_type,
+                    "minimum": transfer.minimum_transfer_seconds,
+                },
+            )
         await connection.execute(
             text(
                 "UPDATE static_feed_versions SET import_status = 'SUPERSEDED' WHERE agency_id = :agency AND import_status = 'ACTIVE'"
