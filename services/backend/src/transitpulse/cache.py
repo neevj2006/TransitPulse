@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportGeneralTypeIssues=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportOperatorIssue=false
 import json
 from datetime import UTC, datetime
 from typing import cast
@@ -89,26 +90,83 @@ class RedisStateStore:
 
     async def put_trip_updates(self, values: list[TripUpdate], ttl_seconds: int = 180) -> None:
         for item in values:
-            await self.client.set(  # pyright: ignore[reportUnknownMemberType]
-                f"tp:v1:{{mbta}}:trip:{item.trip_id}",
-                json.dumps(
+            payload = {
+                "trip_id": item.trip_id,
+                "route_id": item.route_id,
+                "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "predictions": [
                     {
-                        "route_id": item.route_id,
-                        "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                        "stop_id": prediction.stop_id,
+                        "arrival_time": prediction.arrival_time.isoformat()
+                        if prediction.arrival_time
+                        else None,
+                        "departure_time": prediction.departure_time.isoformat()
+                        if prediction.departure_time
+                        else None,
+                        "relationship": prediction.relationship,
                     }
-                ),
-                ex=ttl_seconds,
-            )
+                    for prediction in item.predictions
+                ],
+            }
+            async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
+                pipe.set(f"tp:v1:{{mbta}}:trip:{item.trip_id}", json.dumps(payload), ex=ttl_seconds)
+                for prediction in item.predictions:
+                    index = f"tp:v1:{{mbta}}:stop:{prediction.stop_id}:trips"
+                    pipe.sadd(index, item.trip_id)
+                    pipe.expire(index, ttl_seconds + 30)
+                await pipe.execute()
+
+    async def stop_trip_updates(self, stop_id: str) -> list[dict[str, object]]:
+        trip_ids = await self.client.smembers(  # pyright: ignore[reportUnknownMemberType]
+            f"tp:v1:{{mbta}}:stop:{stop_id}:trips"
+        )
+        values: list[dict[str, object]] = []
+        for trip_id in trip_ids:
+            raw = await self.client.get(f"tp:v1:{{mbta}}:trip:{trip_id}")  # pyright: ignore[reportUnknownMemberType]
+            if raw:
+                values.append(cast(dict[str, object], json.loads(raw)))
+        return values
 
     async def put_alerts(self, values: list[Alert], ttl_seconds: int = 600) -> None:
         for item in values:
-            await self.client.set(  # pyright: ignore[reportUnknownMemberType]
-                f"tp:v1:{{mbta}}:alert:{item.entity_id}",
-                json.dumps(
-                    {"header": item.header, "route_ids": item.route_ids, "stop_ids": item.stop_ids}
-                ),
-                ex=ttl_seconds,
-            )
+            payload = {
+                "alert_id": item.entity_id,
+                "header": item.header,
+                "route_ids": item.route_ids,
+                "stop_ids": item.stop_ids,
+            }
+            async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
+                pipe.set(
+                    f"tp:v1:{{mbta}}:alert:{item.entity_id}", json.dumps(payload), ex=ttl_seconds
+                )
+                for index in (
+                    "tp:v1:{mbta}:alerts",
+                    *(f"tp:v1:{{mbta}}:route:{route}:alerts" for route in item.route_ids),
+                    *(f"tp:v1:{{mbta}}:stop:{stop}:alerts" for stop in item.stop_ids),
+                ):
+                    pipe.sadd(index, item.entity_id)
+                    pipe.expire(index, ttl_seconds + 30)
+                await pipe.execute()
+
+    async def alerts(self, route_id: str | None, stop_id: str | None) -> list[dict[str, object]]:
+        index = (
+            f"tp:v1:{{mbta}}:route:{route_id}:alerts"
+            if route_id
+            else f"tp:v1:{{mbta}}:stop:{stop_id}:alerts"
+            if stop_id
+            else "tp:v1:{mbta}:alerts"
+        )
+        alert_ids = await self.client.smembers(index)  # pyright: ignore[reportUnknownMemberType]
+        values: list[dict[str, object]] = []
+        for alert_id in alert_ids:
+            raw = await self.client.get(f"tp:v1:{{mbta}}:alert:{alert_id}")  # pyright: ignore[reportUnknownMemberType]
+            if raw:
+                item = cast(dict[str, object], json.loads(raw))
+                if (not stop_id or stop_id in item.get("stop_ids", [])) and (
+                    not route_id or route_id in item.get("route_ids", [])
+                ):
+                    values.append(item)
+        return values
 
     async def put_source_health(self, source_id: str, payload: dict[str, object]) -> None:
         await self.client.set(  # pyright: ignore[reportUnknownMemberType]
