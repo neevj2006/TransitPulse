@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -147,6 +147,19 @@ async def run_poller(
                 pass
 
 
+async def prune_raw_snapshots(
+    store: RawSnapshotStore, retention_hours: int, stop: asyncio.Event
+) -> None:
+    while not stop.is_set():
+        removed = store.prune(datetime.now(UTC) - timedelta(hours=retention_hours))
+        if removed:
+            logger.info("raw_snapshots_pruned", count=removed)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=3600)
+        except TimeoutError:
+            pass
+
+
 async def run_worker(
     raw_path: Path,
     vehicle_url: str,
@@ -154,6 +167,7 @@ async def run_worker(
     alert_url: str,
     cache: RedisStateStore | None = None,
     history: RealtimeHistoryStore | None = None,
+    raw_retention_hours: int = 6,
 ) -> None:
     stop = asyncio.Event()
     pollers = build_pollers(raw_path, vehicle_url, trip_url, alert_url)
@@ -163,6 +177,7 @@ async def run_worker(
             run_poller(pollers["mbta-vehicles"], parse_vehicle_positions, stop, projector),
             run_poller(pollers["mbta-trip-updates"], parse_trip_updates, stop, projector),
             run_poller(pollers["mbta-alerts"], parse_alerts, stop, projector),
+            prune_raw_snapshots(next(iter(pollers.values())).raw_store, raw_retention_hours, stop),
         )
     finally:
         if cache:
