@@ -9,6 +9,7 @@ import structlog
 
 from transitpulse.cache import RedisStateStore
 from transitpulse.events import EventBroker
+from transitpulse.history import RealtimeHistoryStore
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     Alert,
@@ -27,12 +28,19 @@ class RealtimeProjector:
     """Applies validated feed entities to bounded current state and optional Redis."""
 
     def __init__(
-        self, state: CurrentState, broker: EventBroker, cache: RedisStateStore | None = None
+        self,
+        state: CurrentState,
+        broker: EventBroker,
+        cache: RedisStateStore | None = None,
+        history: RealtimeHistoryStore | None = None,
     ) -> None:
-        self.state, self.broker, self.cache = state, broker, cache
+        self.state, self.broker, self.cache, self.history = state, broker, cache, history
 
     async def project(
-        self, source_id: str, values: list[Vehicle] | list[TripUpdate] | list[Alert]
+        self,
+        source_id: str,
+        values: list[Vehicle] | list[TripUpdate] | list[Alert],
+        retrieved_at: datetime | None = None,
     ) -> None:
         if source_id.endswith("vehicles"):
             changed = self.state.update_vehicles(values)  # type: ignore[arg-type]
@@ -42,6 +50,8 @@ class RealtimeProjector:
                 self.broker.publish(
                     "vehicle.changed", json.dumps({"vehicle_id": item.vehicle_id}), item.route_id
                 )
+            if self.history:
+                await self.history.record_vehicles(changed, retrieved_at or datetime.now(UTC))
         elif source_id.endswith("trip-updates"):
             self.state.update_trip_updates(values)  # type: ignore[arg-type]
             if self.cache:
@@ -73,10 +83,12 @@ async def run_poller(
     async with httpx.AsyncClient(follow_redirects=True) as client:
         while not stop.is_set():
             result, payload = await poller.poll(client)
+            if projector.history:
+                await projector.history.record_poll(result)
             if payload:
                 try:
                     parsed = parser(payload)
-                    await projector.project(poller.config.source_id, parsed)
+                    await projector.project(poller.config.source_id, parsed, result.completed_at)
                     logger.info(
                         "feed_processed",
                         source_id=poller.config.source_id,
@@ -97,10 +109,11 @@ async def run_worker(
     trip_url: str,
     alert_url: str,
     cache: RedisStateStore | None = None,
+    history: RealtimeHistoryStore | None = None,
 ) -> None:
     stop = asyncio.Event()
     pollers = build_pollers(raw_path, vehicle_url, trip_url, alert_url)
-    projector = RealtimeProjector(CurrentState(), EventBroker(), cache)
+    projector = RealtimeProjector(CurrentState(), EventBroker(), cache, history)
     try:
         await asyncio.gather(
             run_poller(pollers["mbta-vehicles"], parse_vehicle_positions, stop, projector),
@@ -110,3 +123,5 @@ async def run_worker(
     finally:
         if cache:
             await cache.close()
+        if history:
+            await history.close()
