@@ -3,6 +3,7 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import httpx
 import structlog
@@ -59,13 +60,37 @@ class RealtimeProjector:
             if self.history:
                 await self.history.record_vehicles(changed, retrieved_at or datetime.now(UTC))
         elif source_id.endswith("trip-updates"):
-            self.state.update_trip_updates(values)  # type: ignore[arg-type]
+            updates = cast(list[TripUpdate], values)
+            self.state.update_trip_updates(updates)
             if self.cache:
-                await self.cache.put_trip_updates(values)  # type: ignore[arg-type]
+                await self.cache.put_trip_updates(updates)
+            for item in updates:
+                self.broker.publish(
+                    "arrival.changed", json.dumps({"trip_id": item.trip_id}), item.route_id
+                )
+                if self.cache:
+                    await self.cache.publish_event(
+                        "arrival.changed",
+                        json.dumps({"schema_version": "1.0.0", "trip_id": item.trip_id}),
+                        item.route_id,
+                    )
         else:
-            self.state.update_alerts(values)  # type: ignore[arg-type]
+            alerts = cast(list[Alert], values)
+            self.state.update_alerts(alerts)
             if self.cache:
-                await self.cache.put_alerts(values)  # type: ignore[arg-type]
+                await self.cache.put_alerts(alerts)
+            for item in alerts:
+                routes = item.route_ids or (None,)
+                for route_id in routes:
+                    self.broker.publish(
+                        "alert.changed", json.dumps({"alert_id": item.entity_id}), route_id
+                    )
+                    if self.cache:
+                        await self.cache.publish_event(
+                            "alert.changed",
+                            json.dumps({"schema_version": "1.0.0", "alert_id": item.entity_id}),
+                            route_id,
+                        )
         self.state.expire(datetime.now(UTC))
 
 
