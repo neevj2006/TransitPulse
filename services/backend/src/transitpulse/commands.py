@@ -4,9 +4,11 @@ import structlog
 import uvicorn
 from alembic.config import main as alembic_main
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from transitpulse.cache import RedisStateStore
 from transitpulse.config import get_settings
+from transitpulse.history import RealtimeHistoryStore
 from transitpulse.logging import configure_logging
 from transitpulse.worker import run_worker as run_realtime_worker
 
@@ -32,6 +34,11 @@ def run_worker() -> None:
         if settings.redis_url
         else None
     )
+    history = (
+        RealtimeHistoryStore(create_async_engine(settings.database_url))
+        if settings.database_url
+        else None
+    )
     asyncio.run(
         run_realtime_worker(
             settings.raw_snapshot_path,
@@ -39,5 +46,6 @@ def run_worker() -> None:
             settings.trip_updates_url,
             settings.alerts_url,
             cache,
+            history,
         )
     )
