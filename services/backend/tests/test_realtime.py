@@ -51,6 +51,15 @@ def test_older_current_state_cannot_overwrite_newer_value() -> None:
     assert state.route_vehicles("Red")[0].latitude == 42.0
 
 
+def test_current_state_expires_old_vehicles() -> None:
+    state = CurrentState(vehicle_ttl_seconds=30)
+    now = datetime.now(UTC)
+    state.update_vehicles(
+        [Vehicle("one", "v", "Red", None, 42.0, -71.0, now - timedelta(seconds=31))]
+    )
+    assert state.expire(now) == ["v"]
+
+
 async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path) -> None:
     seen: dict[str, str] = {}
 

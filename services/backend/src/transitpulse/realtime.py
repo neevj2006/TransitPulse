@@ -123,8 +123,11 @@ def parse_alerts(payload: bytes) -> list[Alert]:
 
 
 class CurrentState:
-    def __init__(self) -> None:
+    def __init__(self, vehicle_ttl_seconds: int = 180) -> None:
         self.vehicles: dict[str, Vehicle] = {}
+        self.vehicle_ttl_seconds = vehicle_ttl_seconds
+        self.trip_updates: dict[str, TripUpdate] = {}
+        self.alerts: dict[str, Alert] = {}
 
     def update_vehicles(self, candidates: list[Vehicle]) -> list[Vehicle]:
         changed: list[Vehicle] = []
@@ -147,3 +150,20 @@ class CurrentState:
             (item for item in self.vehicles.values() if item.route_id == route_id),
             key=lambda item: item.vehicle_id,
         )
+
+    def expire(self, now: datetime) -> list[str]:
+        expired = [
+            key
+            for key, value in self.vehicles.items()
+            if value.source_timestamp
+            and (now - value.source_timestamp).total_seconds() > self.vehicle_ttl_seconds
+        ]
+        for key in expired:
+            del self.vehicles[key]
+        return expired
+
+    def update_trip_updates(self, values: list[TripUpdate]) -> None:
+        self.trip_updates.update({item.trip_id: item for item in values})
+
+    def update_alerts(self, values: list[Alert]) -> None:
+        self.alerts.update({item.entity_id: item for item in values})
