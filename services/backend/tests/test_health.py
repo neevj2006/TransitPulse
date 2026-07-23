@@ -37,6 +37,14 @@ async def test_liveness(client: AsyncClient) -> None:
     }
 
 
+async def test_cors_is_narrow_by_default(client: AsyncClient) -> None:
+    response = await client.options(
+        "/api/v1/live/health",
+        headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"},
+    )
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
 async def test_readiness_checks_dependencies(client: AsyncClient) -> None:
     response = await client.get("/health/ready")
     assert response.status_code == 200

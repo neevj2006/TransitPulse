@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     vehicle_positions_url: str = "https://cdn.mbta.com/realtime/VehiclePositions.pb"
     trip_updates_url: str = "https://cdn.mbta.com/realtime/TripUpdates.pb"
     alerts_url: str = "https://cdn.mbta.com/realtime/Alerts.pb"
+    allowed_origins: tuple[str, ...] = ("http://localhost:3000",)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
 

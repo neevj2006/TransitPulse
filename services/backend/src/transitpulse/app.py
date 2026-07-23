@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from transitpulse.cache import RedisProbe
@@ -55,6 +56,14 @@ def create_app(
     app.state.pollers = {}
     app.state.event_broker = EventBroker()
     app.state.request_windows = {}
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(application_settings.allowed_origins),
+        allow_credentials=False,
+        allow_methods=["GET"],
+        allow_headers=["Accept", "Content-Type", "Last-Event-ID", "X-Request-ID"],
+        max_age=600,
+    )
 
     @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(
