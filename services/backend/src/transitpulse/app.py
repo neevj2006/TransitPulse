@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from transitpulse.cache import RedisProbe
 from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
+from transitpulse.events import EventBroker
 from transitpulse.health import Probe, router
 from transitpulse.live_api import router as live_router
 from transitpulse.logging import configure_logging
@@ -51,6 +52,7 @@ def create_app(
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.state.current_state = CurrentState()
     app.state.pollers = {}
+    app.state.event_broker = EventBroker()
 
     @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(

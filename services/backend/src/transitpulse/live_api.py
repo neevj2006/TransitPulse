@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from transitpulse.events import EventBroker
 from transitpulse.realtime import CurrentState
 
 router = APIRouter(prefix="/api/v1/live", tags=["realtime"])
@@ -29,11 +30,22 @@ async def health(request: Request) -> dict[str, object]:
 
 
 @router.get("/events")
-async def events() -> StreamingResponse:
+async def events(
+    request: Request, route_id: str | None = None, stop_id: str | None = None
+) -> StreamingResponse:
     async def heartbeat():
-        yield 'event: heartbeat\nid: 1\ndata: {"schema_version":"1.0.0"}\n\n'
+        broker: EventBroker = request.app.state.event_broker
+        last_event = int(request.headers.get("last-event-id", "0"))
+        for item in broker.since(last_event, route_id, stop_id):
+            yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
+            last_event = item.event_id
+        yield f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
 
-    return StreamingResponse(heartbeat(), media_type="text/event-stream")
+    return StreamingResponse(
+        heartbeat(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/routes/{route_id}/vehicles")
