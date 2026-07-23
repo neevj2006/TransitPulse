@@ -9,7 +9,11 @@ from transitpulse.schedule.models import Schedule
 
 
 async def persist_and_activate(
-    engine: AsyncEngine, schedule: Schedule, agency_id: str = "mbta"
+    engine: AsyncEngine,
+    schedule: Schedule,
+    agency_id: str = "mbta",
+    source_url: str | None = None,
+    retrieved_at: datetime | None = None,
 ) -> str:
     """Persist a fully parsed schedule in one transaction, then atomically activate it."""
     version_id = str(uuid4())
@@ -25,13 +29,15 @@ async def persist_and_activate(
             return str(row[0])
         await connection.execute(
             text(
-                "INSERT INTO static_feed_versions (feed_version_id, agency_id, payload_checksum, retrieved_at, import_status) VALUES (:id, :agency, :checksum, :retrieved, 'PENDING')"
+                "INSERT INTO static_feed_versions (feed_version_id, agency_id, payload_checksum, retrieved_at, source_url, feed_label, import_status) VALUES (:id, :agency, :checksum, :retrieved, :source_url, :feed_label, 'PENDING')"
             ),
             {
                 "id": version_id,
                 "agency": agency_id,
                 "checksum": schedule.checksum,
-                "retrieved": datetime.now(UTC),
+                "retrieved": retrieved_at or datetime.now(UTC),
+                "source_url": source_url,
+                "feed_label": schedule.version,
             },
         )
         for agency in schedule.agencies.values():
