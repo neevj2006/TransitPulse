@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
+from time import monotonic
 
 import structlog
 from fastapi import FastAPI, Request, Response
@@ -53,12 +54,27 @@ def create_app(
     app.state.current_state = CurrentState()
     app.state.pollers = {}
     app.state.event_broker = EventBroker()
+    app.state.request_windows = {}
 
     @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        client = request.client.host if request.client else "unknown"
+        now = monotonic()
+        window = [
+            moment
+            for moment in request.app.state.request_windows.get(client, [])
+            if now - moment < 60
+        ]
+        if len(window) >= 120:
+            return JSONResponse(
+                {"code": "RATE_LIMITED", "message": "Too many requests.", "request_id": request_id},
+                status_code=429,
+                headers={"Retry-After": "60", "X-Request-ID": request_id},
+            )
+        request.app.state.request_windows[client] = [*window, now]
         try:
             response = await call_next(request)
         except Exception:
