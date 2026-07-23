@@ -46,17 +46,33 @@ async def events(
 ) -> StreamingResponse:
     async def heartbeat():
         broker: EventBroker = request.app.state.event_broker
+        cache: RedisStateStore | None = request.app.state.redis_state_store
         last_event = int(request.headers.get("last-event-id", "0"))
+        heartbeat_at = asyncio.get_running_loop().time()
+
+        def heartbeat() -> str:
+            return f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
+
         while not await request.is_disconnected():
-            replay = broker.since(last_event, route_id, stop_id)
+            replay = (
+                await cache.events_since(last_event, route_id, stop_id)
+                if cache
+                else broker.since(last_event, route_id, stop_id)
+            )
             for item in replay:
                 yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
                 last_event = item.event_id
-            broker.changed.clear()
-            try:
-                await asyncio.wait_for(broker.changed.wait(), timeout=20)
-            except TimeoutError:
-                yield f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
+            if asyncio.get_running_loop().time() - heartbeat_at >= 20:
+                yield heartbeat()
+                heartbeat_at = asyncio.get_running_loop().time()
+            if cache:
+                await asyncio.sleep(1)
+            else:
+                broker.changed.clear()
+                try:
+                    await asyncio.wait_for(broker.changed.wait(), timeout=20)
+                except TimeoutError:
+                    yield heartbeat()
 
     return StreamingResponse(
         heartbeat(),
