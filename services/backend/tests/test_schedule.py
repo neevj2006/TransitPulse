@@ -4,12 +4,18 @@ import zipfile
 from collections.abc import AsyncGenerator
 from datetime import date
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
-from transitpulse.schedule.importer import GtfsValidationError, import_archive, parse_gtfs_time
+from transitpulse.schedule.importer import (
+    GtfsValidationError,
+    download_archive,
+    import_archive,
+    parse_gtfs_time,
+)
 
 
 def archive(files: dict[str, str]) -> bytes:
@@ -59,6 +65,17 @@ def test_rejects_unsafe_or_incomplete_archives(payload: bytes, code: str) -> Non
 def test_rejects_invalid_gtfs_time() -> None:
     with pytest.raises(GtfsValidationError):
         parse_gtfs_time("25:61:00")
+
+
+async def test_download_records_provenance() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert "TransitPulse" in request.headers["user-agent"]
+        return httpx.Response(200, content=b"archive")
+
+    async with AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await download_archive("https://example.test/gtfs.zip", client)
+    assert result.source_url == "https://example.test/gtfs.zip"
+    assert result.checksum
 
 
 @pytest.fixture
