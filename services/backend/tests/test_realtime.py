@@ -16,6 +16,8 @@ from transitpulse.realtime import (
     parse_trip_updates,
     parse_vehicle_positions,
 )
+from transitpulse.reconciliation import reconcile_vehicle
+from transitpulse.schedule.models import Schedule
 
 
 def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
@@ -61,6 +63,14 @@ def test_current_state_expires_old_vehicles() -> None:
         [Vehicle("one", "v", "Red", None, 42.0, -71.0, now - timedelta(seconds=31))]
     )
     assert state.expire(now) == ["v"]
+
+
+def test_unreconciled_vehicle_is_explicit() -> None:
+    result = reconcile_vehicle(
+        Vehicle("e", "v", "Missing", None, 42, -71, None), Schedule("v", "checksum")
+    )
+    assert result.state == "UNRECONCILED"
+    assert result.reason == "ROUTE_UNRECONCILED"
 
 
 async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path) -> None:
