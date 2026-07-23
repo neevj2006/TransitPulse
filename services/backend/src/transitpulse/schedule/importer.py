@@ -9,7 +9,16 @@ from pathlib import PurePosixPath
 
 import httpx
 
-from transitpulse.schedule.models import Route, Schedule, Service, Stop, StopTime, Trip
+from transitpulse.schedule.models import (
+    Agency,
+    Route,
+    Schedule,
+    Service,
+    Stop,
+    StopTime,
+    Transfer,
+    Trip,
+)
 
 REQUIRED_FILES = {"agency.txt", "routes.txt", "stops.txt", "trips.txt", "stop_times.txt"}
 MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
@@ -128,6 +137,12 @@ def import_archive(payload: bytes) -> Schedule:
         feed_info = _rows(zf, "feed_info.txt")
         version = feed_info[0].get("feed_version") if feed_info else None
         schedule = Schedule(version=version or checksum[:12], checksum=checksum)
+        for row in _rows(zf, "agency.txt"):
+            agency_id = row.get("agency_id") or "default"
+            name, timezone = row.get("agency_name", ""), row.get("agency_timezone", "")
+            if not name or not timezone:
+                raise GtfsValidationError("REFERENCE_MISSING", "agency_name or agency_timezone")
+            schedule.agencies[agency_id] = Agency(agency_id, name, timezone)
         for row in _rows(zf, "routes.txt"):
             route_id = row.get("route_id", "")
             if not route_id:
@@ -241,4 +256,18 @@ def import_archive(payload: bytes) -> Schedule:
                     _coordinate(row.get("shape_pt_lon", ""), -180, 180, "shape_pt_lon") or 0.0,
                 )
             )
+        for row in _rows(zf, "transfers.txt"):
+            from_stop, to_stop = row.get("from_stop_id", ""), row.get("to_stop_id", "")
+            if from_stop not in schedule.stops or to_stop not in schedule.stops:
+                raise GtfsValidationError("REFERENCE_MISSING", f"transfer {from_stop}:{to_stop}")
+            try:
+                transfer_type = int(row.get("transfer_type") or 0)
+                minimum = int(row["min_transfer_time"]) if row.get("min_transfer_time") else None
+            except ValueError as error:
+                raise GtfsValidationError(
+                    "TRANSFER_INVALID", f"transfer {from_stop}:{to_stop}"
+                ) from error
+            if transfer_type not in {0, 1, 2, 3} or (minimum is not None and minimum < 0):
+                raise GtfsValidationError("TRANSFER_INVALID", f"transfer {from_stop}:{to_stop}")
+            schedule.transfers.append(Transfer(from_stop, to_stop, transfer_type, minimum))
         return schedule
