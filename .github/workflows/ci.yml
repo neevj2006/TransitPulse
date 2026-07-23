@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm --filter web format
+
+      - name: Lint
+        run: pnpm --filter web lint
+
+      - name: Type-check
+        run: pnpm --filter web typecheck
+
+      - name: Run unit tests
+        run: pnpm --filter web test
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_APP_ENV: production
+        run: pnpm --filter web build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/backend/uv.lock
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type-check
+        run: uv run pyright
+
+      - name: Run unit tests
+        run: uv run pytest -m "not integration"
+
+      - name: Check application imports
+        run: uv run python -c "from transitpulse.main import app; from google.transit import gtfs_realtime_pb2; assert app.title and gtfs_realtime_pb2.FeedMessage"
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5-alpine
+        env:
+          POSTGRES_DB: transitpulse
+          POSTGRES_PASSWORD: transitpulse_ci
+          POSTGRES_USER: transitpulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U transitpulse -d transitpulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      valkey:
+        image: valkey/valkey:8.1.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      TP_DATABASE_URL: postgresql+asyncpg://transitpulse:transitpulse_ci@127.0.0.1:5432/transitpulse
+      TP_ENVIRONMENT: test
+      TP_REDIS_URL: redis://127.0.0.1:6379/0
+    defaults:
+      run:
+        working-directory: services/backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/backend/uv.lock
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Validate migrations
+        run: uv run alembic check
+
+      - name: Run integration tests
+        run: uv run pytest -m integration
+
+  browser:
+    name: Browser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Run browser tests
+        env:
+          NEXT_PUBLIC_APP_ENV: preview
+        run: pnpm --filter web test:e2e
