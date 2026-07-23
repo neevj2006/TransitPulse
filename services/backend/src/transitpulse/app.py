@@ -73,6 +73,8 @@ def create_app(
         )
         return response
 
+    _ = request_context
+
     app.include_router(router)
     app.include_router(schedule_router)
     app.include_router(live_router)
