@@ -18,6 +18,24 @@ class Vehicle:
     source_timestamp: datetime | None
 
 
+@dataclass(frozen=True)
+class TripUpdate:
+    entity_id: str
+    trip_id: str
+    route_id: str | None
+    vehicle_id: str | None
+    timestamp: datetime | None
+    relationship: str
+
+
+@dataclass(frozen=True)
+class Alert:
+    entity_id: str
+    header: str | None
+    route_ids: tuple[str, ...]
+    stop_ids: tuple[str, ...]
+
+
 class RealtimeValidationError(ValueError):
     pass
 
@@ -51,6 +69,57 @@ def parse_vehicle_positions(payload: bytes) -> list[Vehicle]:
             )
         )
     return vehicles
+
+
+def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
+    feed = gtfs_realtime_pb2.FeedMessage()
+    try:
+        feed.ParseFromString(payload)
+    except Exception as error:
+        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    results: list[TripUpdate] = []
+    for entity in feed.entity:
+        if (
+            not entity.id
+            or not entity.HasField("trip_update")
+            or not entity.trip_update.trip.trip_id
+        ):
+            continue
+        update = entity.trip_update
+        results.append(
+            TripUpdate(
+                entity.id,
+                update.trip.trip_id,
+                update.trip.route_id or None,
+                update.vehicle.id or None,
+                datetime.fromtimestamp(update.timestamp, UTC) if update.timestamp else None,
+                str(update.trip.schedule_relationship),
+            )
+        )
+    return results
+
+
+def parse_alerts(payload: bytes) -> list[Alert]:
+    feed = gtfs_realtime_pb2.FeedMessage()
+    try:
+        feed.ParseFromString(payload)
+    except Exception as error:
+        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    results: list[Alert] = []
+    for entity in feed.entity:
+        if not entity.id or not entity.HasField("alert"):
+            continue
+        alert = entity.alert
+        header = alert.header_text.translation[0].text if alert.header_text.translation else None
+        results.append(
+            Alert(
+                entity.id,
+                header,
+                tuple(item.route_id for item in alert.informed_entity if item.route_id),
+                tuple(item.stop_id for item in alert.informed_entity if item.stop_id),
+            )
+        )
+    return results
 
 
 class CurrentState:

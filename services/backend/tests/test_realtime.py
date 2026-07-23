@@ -6,7 +6,13 @@ import httpx
 from google.transit import gtfs_realtime_pb2
 
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
-from transitpulse.realtime import CurrentState, Vehicle, parse_vehicle_positions
+from transitpulse.realtime import (
+    CurrentState,
+    Vehicle,
+    parse_alerts,
+    parse_trip_updates,
+    parse_vehicle_positions,
+)
 
 
 def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
@@ -19,6 +25,20 @@ def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
     entity.vehicle.position.longitude = -71.0
     entity.vehicle.timestamp = 1_700_000_000
     assert parse_vehicle_positions(feed.SerializeToString())[0].route_id == "Red"
+
+
+def test_parses_trip_updates_and_alerts() -> None:
+    trip_feed = gtfs_realtime_pb2.FeedMessage()
+    trip_feed.header.gtfs_realtime_version = "2.0"
+    update = trip_feed.entity.add(id="update").trip_update
+    update.trip.trip_id = "trip"
+    update.trip.route_id = "Red"
+    assert parse_trip_updates(trip_feed.SerializeToString())[0].trip_id == "trip"
+    alert_feed = gtfs_realtime_pb2.FeedMessage()
+    alert_feed.header.gtfs_realtime_version = "2.0"
+    alert = alert_feed.entity.add(id="alert").alert
+    alert.informed_entity.add().route_id = "Red"
+    assert parse_alerts(alert_feed.SerializeToString())[0].route_ids == ("Red",)
 
 
 def test_older_current_state_cannot_overwrite_newer_value() -> None:
