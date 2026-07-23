@@ -23,13 +23,28 @@ export function TransitMap({ routeName }: TransitMapProps) {
   }, []);
 
   return (
-    <section aria-labelledby="map-heading" className="overflow-hidden rounded-xl border bg-surface">
+    <section
+      aria-labelledby="map-heading"
+      className="bg-surface overflow-hidden rounded-xl border"
+    >
       <div className="flex items-center justify-between border-b p-4">
-        <h2 id="map-heading" className="font-semibold">{routeName} map</h2>
-        <a className="text-sm text-brand underline" href="#stop-list">Skip to stop list</a>
+        <h2 id="map-heading" className="font-semibold">
+          {routeName} map
+        </h2>
+        <a className="text-brand text-sm underline" href="#stop-list">
+          Skip to stop list
+        </a>
       </div>
-      {failed ? <p className="p-4 text-muted">Map tiles are unavailable. Use the stop list below.</p> : <div ref={container} className="h-80" aria-label={`${routeName} map`} />}
-      <p className="border-t p-3 text-xs text-muted">Map data © OpenStreetMap contributors · Tiles by OpenFreeMap</p>
+      {failed ? (
+        <p className="text-muted p-4">
+          Map tiles are unavailable. Use the stop list below.
+        </p>
+      ) : (
+        <div ref={container} className="h-80" aria-label={`${routeName} map`} />
+      )}
+      <p className="text-muted border-t p-3 text-xs">
+        Map data © OpenStreetMap contributors · Tiles by OpenFreeMap
+      </p>
     </section>
   );
 }
