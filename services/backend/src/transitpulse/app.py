@@ -51,10 +51,10 @@ def create_app(
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.state.current_state = CurrentState()
 
-    @app.middleware("http")
+    @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:  # pyright: ignore[reportUnusedFunction]
+    ) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
         try:
             response = await call_next(request)
