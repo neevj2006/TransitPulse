@@ -3,7 +3,7 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from transitpulse.cache import RedisStateStore
@@ -83,15 +83,43 @@ async def events(
 
 
 @router.get("/routes/{route_id}/vehicles")
-async def vehicles(request: Request, route_id: str) -> dict[str, object]:
+async def vehicles(
+    request: Request,
+    route_id: str,
+    min_latitude: float | None = Query(None, ge=-90, le=90),
+    max_latitude: float | None = Query(None, ge=-90, le=90),
+    min_longitude: float | None = Query(None, ge=-180, le=180),
+    max_longitude: float | None = Query(None, ge=-180, le=180),
+) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state
     now = datetime.now(UTC)
     cache: RedisStateStore | None = request.app.state.redis_state_store
     source_vehicles = (
         await cache.route_vehicles(route_id) if cache else state.route_vehicles(route_id)
     )
+    bounds = (min_latitude, max_latitude, min_longitude, max_longitude)
+    if any(value is not None for value in bounds) and any(value is None for value in bounds):
+        raise HTTPException(
+            422,
+            detail={"code": "INVALID_BOUNDS", "message": "All bounding-box fields are required."},
+        )
+    if min_latitude is not None and (min_latitude > max_latitude or min_longitude > max_longitude):
+        raise HTTPException(
+            422, detail={"code": "INVALID_BOUNDS", "message": "Bounding-box ranges are invalid."}
+        )
     values: list[dict[str, object]] = []
     for vehicle in source_vehicles:
+        if (
+            min_latitude is not None
+            and max_latitude is not None
+            and min_longitude is not None
+            and max_longitude is not None
+            and not (
+                min_latitude <= vehicle.latitude <= max_latitude
+                and min_longitude <= vehicle.longitude <= max_longitude
+            )
+        ):
+            continue
         age = (
             int((now - vehicle.source_timestamp).total_seconds())
             if vehicle.source_timestamp
@@ -115,6 +143,37 @@ async def vehicles(request: Request, route_id: str) -> dict[str, object]:
         "schema_version": "1.0.0",
         "data": values,
         "meta": {"request_id": str(uuid4()), "generated_at": now},
+    }
+
+
+@router.get("/trips/{trip_id}")
+async def trip_progress(request: Request, trip_id: str) -> dict[str, object]:
+    state: CurrentState = request.app.state.current_state
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    item = await cache.trip_update(trip_id) if cache else state.trip_updates.get(trip_id)
+    if not item:
+        raise HTTPException(
+            404,
+            detail={
+                "code": "TRIP_LIVE_DATA_UNAVAILABLE",
+                "message": "Live trip data is unavailable.",
+            },
+        )
+    if isinstance(item, dict):
+        data = item
+    else:
+        data = {
+            "trip_id": item.trip_id,
+            "route_id": item.route_id,
+            "vehicle_id": item.vehicle_id,
+            "source_timestamp": item.timestamp,
+            "relationship": item.relationship,
+            "predictions": item.predictions,
+        }
+    return {
+        "schema_version": "1.0.0",
+        "data": data,
+        "meta": {"request_id": str(uuid4()), "generated_at": datetime.now(UTC)},
     }
 
 

@@ -143,6 +143,32 @@ async def test_live_vehicle_response_has_freshness() -> None:
     assert response.json()["data"][0]["freshness"]["state"] == "HEALTHY"
 
 
+async def test_live_vehicle_bounding_box_and_trip_progress() -> None:
+    app = create_app(Settings(environment="test"), probes=[])
+    now = datetime.now(UTC)
+    app.state.current_state.update_vehicles(
+        [Vehicle("entity", "bus", "Red", "trip", 42.0, -71.0, now)]
+    )
+    app.state.current_state.update_trip_updates(
+        [TripUpdate("update", "trip", "Red", "bus", now, "0")]
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        vehicles = await client.get(
+            "/api/v1/live/routes/Red/vehicles",
+            params={
+                "min_latitude": 41,
+                "max_latitude": 43,
+                "min_longitude": -72,
+                "max_longitude": -70,
+            },
+        )
+        progress = await client.get("/api/v1/live/trips/trip")
+    assert vehicles.json()["data"][0]["vehicle_id"] == "bus"
+    assert progress.json()["data"]["trip_id"] == "trip"
+
+
 async def test_live_arrivals_are_scoped_to_the_requested_stop() -> None:
     app = create_app(Settings(environment="test"), probes=[])
     now = datetime.now(UTC)
