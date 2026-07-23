@@ -83,6 +83,19 @@ async def run_poller(
     async with httpx.AsyncClient(follow_redirects=True) as client:
         while not stop.is_set():
             result, payload = await poller.poll(client)
+            if projector.cache:
+                now = datetime.now(UTC)
+                await projector.cache.put_source_health(
+                    poller.config.source_id,
+                    {
+                        "source_id": poller.config.source_id,
+                        "state": poller.health.state(now),
+                        "last_success_at": poller.health.last_success_at,
+                        "consecutive_failures": poller.health.failures,
+                        "last_outcome": result.outcome,
+                        "updated_at": now,
+                    },
+                )
             if projector.history:
                 await projector.history.record_poll(result)
             if payload:

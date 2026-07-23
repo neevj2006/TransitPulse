@@ -107,3 +107,14 @@ class RedisStateStore:
                 ),
                 ex=ttl_seconds,
             )
+
+    async def put_source_health(self, source_id: str, payload: dict[str, object]) -> None:
+        await self.client.set(  # pyright: ignore[reportUnknownMemberType]
+            f"tp:v1:{{mbta}}:source:{source_id}:health", json.dumps(payload, default=str), ex=300
+        )
+
+    async def source_health(self, source_id: str) -> dict[str, object] | None:
+        raw = await self.client.get(  # pyright: ignore[reportUnknownMemberType]
+            f"tp:v1:{{mbta}}:source:{source_id}:health"
+        )
+        return json.loads(raw) if raw else None
