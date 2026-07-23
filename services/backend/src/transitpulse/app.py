@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from time import monotonic
@@ -70,6 +71,8 @@ def create_app(
         else None
     )
     app.state.request_windows = {}
+    app.state.sse_connections = 0
+    app.state.sse_lock = asyncio.Lock()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(application_settings.allowed_origins),
