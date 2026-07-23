@@ -7,8 +7,8 @@ from google.transit import gtfs_realtime_pb2
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
-from transitpulse.events import EventBroker
 from transitpulse.diagnostics import vehicle_quality
+from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
