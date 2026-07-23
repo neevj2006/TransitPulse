@@ -7,8 +7,9 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from redis.asyncio import Redis
 
-from transitpulse.cache import RedisProbe
+from transitpulse.cache import RedisProbe, RedisStateStore
 from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
 from transitpulse.events import EventBroker
@@ -43,6 +44,8 @@ def create_app(
         yield
         for probe in app.state.probes:
             await probe.close()
+        if app.state.redis_state_store:
+            await app.state.redis_state_store.close()
         logger.info("application_stopped")
 
     app = FastAPI(
@@ -55,6 +58,15 @@ def create_app(
     app.state.current_state = CurrentState()
     app.state.pollers = {}
     app.state.event_broker = EventBroker()
+    app.state.redis_state_store = (
+        RedisStateStore(
+            Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
+                str(application_settings.redis_url), decode_responses=True
+            )
+        )
+        if application_settings.redis_url
+        else None
+    )
     app.state.request_windows = {}
     app.add_middleware(
         CORSMiddleware,
