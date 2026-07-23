@@ -95,22 +95,38 @@ async def vehicles(request: Request, route_id: str) -> dict[str, object]:
 @router.get("/stops/{stop_id}/arrivals")
 async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state
-    values = [item for item in state.trip_updates.values() if item.route_id]
     now = datetime.now(UTC)
+    values: list[dict[str, object]] = []
+    for item in state.trip_updates.values():
+        for prediction in item.predictions:
+            if prediction.stop_id != stop_id:
+                continue
+            predicted_time = prediction.arrival_time or prediction.departure_time
+            age = int((now - item.timestamp).total_seconds()) if item.timestamp else None
+            values.append(
+                {
+                    "trip_id": item.trip_id,
+                    "route_id": item.route_id,
+                    "stop_id": prediction.stop_id,
+                    "agency_prediction": {
+                        "kind": "agency_predicted",
+                        "arrival_time": prediction.arrival_time,
+                        "departure_time": prediction.departure_time,
+                        "relationship": prediction.relationship,
+                    },
+                    "source_timestamp": item.timestamp,
+                    "freshness": {
+                        "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
+                        "age_seconds": age,
+                    },
+                    "scheduled_fallback": None,
+                    "sort_timestamp": predicted_time or now,
+                }
+            )
+    values.sort(key=lambda value: str(value.pop("sort_timestamp")))
     return {
         "schema_version": "1.0.0",
-        "data": [
-            {
-                "trip_id": item.trip_id,
-                "route_id": item.route_id,
-                "agency_prediction": None,
-                "scheduled_fallback": {
-                    "kind": "scheduled_fallback",
-                    "reason": "LIVE_PREDICTION_UNAVAILABLE",
-                },
-            }
-            for item in values[:100]
-        ],
+        "data": values[:100],
         "meta": {
             "request_id": str(uuid4()),
             "stop_id": stop_id,
