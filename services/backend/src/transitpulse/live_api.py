@@ -46,6 +46,14 @@ async def health(request: Request) -> dict[str, object]:
 async def events(
     request: Request, route_id: str | None = None, stop_id: str | None = None
 ) -> StreamingResponse:
+    async with request.app.state.sse_lock:
+        if request.app.state.sse_connections >= request.app.state.settings.sse_connection_limit:
+            raise HTTPException(
+                429,
+                detail={"code": "SSE_CONNECTION_LIMIT", "message": "Too many live connections."},
+            )
+        request.app.state.sse_connections += 1
+
     async def heartbeat():
         broker: EventBroker = request.app.state.event_broker
         cache: RedisStateStore | None = request.app.state.redis_state_store
@@ -55,26 +63,30 @@ async def events(
         def heartbeat() -> str:
             return f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
 
-        while not await request.is_disconnected():
-            replay = (
-                await cache.events_since(last_event, route_id, stop_id)
-                if cache
-                else broker.since(last_event, route_id, stop_id)
-            )
-            for item in replay:
-                yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
-                last_event = item.event_id
-            if asyncio.get_running_loop().time() - heartbeat_at >= 20:
-                yield heartbeat()
-                heartbeat_at = asyncio.get_running_loop().time()
-            if cache:
-                await asyncio.sleep(1)
-            else:
-                broker.changed.clear()
-                try:
-                    await asyncio.wait_for(broker.changed.wait(), timeout=20)
-                except TimeoutError:
+        try:
+            while not await request.is_disconnected():
+                replay = (
+                    await cache.events_since(last_event, route_id, stop_id)
+                    if cache
+                    else broker.since(last_event, route_id, stop_id)
+                )
+                for item in replay:
+                    yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
+                    last_event = item.event_id
+                if asyncio.get_running_loop().time() - heartbeat_at >= 20:
                     yield heartbeat()
+                    heartbeat_at = asyncio.get_running_loop().time()
+                if cache:
+                    await asyncio.sleep(1)
+                else:
+                    broker.changed.clear()
+                    try:
+                        await asyncio.wait_for(broker.changed.wait(), timeout=20)
+                    except TimeoutError:
+                        yield heartbeat()
+        finally:
+            async with request.app.state.sse_lock:
+                request.app.state.sse_connections -= 1
 
     return StreamingResponse(
         heartbeat(),

@@ -248,3 +248,14 @@ def test_event_broker_scopes_and_replays_monotonic_events() -> None:
     broker.publish("vehicle.changed", '{"schema_version":"1.0.0"}', route_id="Orange")
     assert [event.event_id for event in broker.since(0, "Red", None)] == [1]
     assert broker.since(1, "Red", None) == []
+
+
+async def test_sse_connection_limit_returns_a_safe_problem() -> None:
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
+    app.state.sse_connections = app.state.settings.sse_connection_limit
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/live/events")
+    assert response.status_code == 429
+    assert response.json()["code"] == "SSE_CONNECTION_LIMIT"
