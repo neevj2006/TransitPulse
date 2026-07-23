@@ -18,10 +18,25 @@ config.set_main_option("sqlalchemy.url", database_url)
 target_metadata = Base.metadata
 
 
+def include_name(
+    name: str | None,
+    type_: str,
+    parent_names: dict[str, str | None],
+) -> bool:
+    if type_ == "schema":
+        return name in {None, "public"}
+    if type_ == "table":
+        table_name = parent_names.get("schema_qualified_table_name") or name
+        return table_name in target_metadata.tables
+    return True
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        include_name=include_name,
+        include_schemas=True,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -30,7 +45,12 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_name=include_name,
+        include_schemas=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
