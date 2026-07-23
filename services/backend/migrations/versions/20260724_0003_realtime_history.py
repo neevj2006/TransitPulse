@@ -4,7 +4,9 @@ Revision ID: 20260724_0003
 Revises: 20260724_0002
 """
 
+# ruff: noqa: E501
 from collections.abc import Sequence
+
 from alembic import op
 
 revision: str = "20260724_0003"
