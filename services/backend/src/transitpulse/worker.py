@@ -50,6 +50,12 @@ class RealtimeProjector:
                 self.broker.publish(
                     "vehicle.changed", json.dumps({"vehicle_id": item.vehicle_id}), item.route_id
                 )
+                if self.cache:
+                    await self.cache.publish_event(
+                        "vehicle.changed",
+                        json.dumps({"schema_version": "1.0.0", "vehicle_id": item.vehicle_id}),
+                        item.route_id,
+                    )
             if self.history:
                 await self.history.record_vehicles(changed, retrieved_at or datetime.now(UTC))
         elif source_id.endswith("trip-updates"):

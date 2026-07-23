@@ -1,8 +1,10 @@
 import json
 from datetime import UTC, datetime
+from typing import cast
 
 from redis.asyncio import Redis
 
+from transitpulse.events import LiveEvent
 from transitpulse.realtime import Alert, TripUpdate, Vehicle
 
 
@@ -118,3 +120,36 @@ class RedisStateStore:
             f"tp:v1:{{mbta}}:source:{source_id}:health"
         )
         return json.loads(raw) if raw else None
+
+    async def publish_event(
+        self, kind: str, payload: str, route_id: str | None = None, stop_id: str | None = None
+    ) -> LiveEvent:
+        event_id = int(
+            await self.client.incr("tp:v1:{mbta}:events:next-id")  # pyright: ignore[reportUnknownMemberType]
+        )
+        event = LiveEvent(event_id, kind, route_id, stop_id, payload)
+        encoded = json.dumps(event.__dict__)
+        async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
+            pipe.rpush("tp:v1:{mbta}:events", encoded)
+            pipe.ltrim("tp:v1:{mbta}:events", -100, -1)
+            pipe.expire("tp:v1:{mbta}:events", 300)
+            await pipe.execute()
+        return event
+
+    async def events_since(
+        self, event_id: int, route_id: str | None, stop_id: str | None
+    ) -> list[LiveEvent]:
+        raw_events = cast(
+            list[str],
+            await self.client.execute_command(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                "LRANGE", "tp:v1:{mbta}:events", 0, -1
+            ),
+        )
+        events = [LiveEvent(**json.loads(raw)) for raw in raw_events]
+        return [
+            event
+            for event in events
+            if event.event_id > event_id
+            and (not route_id or event.route_id == route_id)
+            and (not stop_id or event.stop_id == stop_id)
+        ]
