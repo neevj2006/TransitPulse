@@ -10,7 +10,7 @@ from transitpulse.schedule.models import Schedule
 INSERT_CHUNK_SIZE = 5_000
 
 
-async def _insert_many(
+async def insert_many(
     connection: AsyncConnection, statement: str, rows: list[dict[str, object]]
 ) -> None:
     for start in range(0, len(rows), INSERT_CHUNK_SIZE):
@@ -61,7 +61,7 @@ async def persist_and_activate(
                     "timezone": agency.timezone,
                 },
             )
-        routes = [
+        routes: list[dict[str, object]] = [
             {
                 "version": version_id,
                 "id": route.route_id,
@@ -73,13 +73,12 @@ async def persist_and_activate(
             for route in schedule.routes.values()
         ]
         if routes:
-            await connection.execute(
-                text(
-                    "INSERT INTO routes (feed_version_id, route_id, short_name, long_name, route_type, source_color) VALUES (:version, :id, :short, :long, :type, :color)"
-                ),
+            await insert_many(
+                connection,
+                "INSERT INTO routes (feed_version_id, route_id, short_name, long_name, route_type, source_color) VALUES (:version, :id, :short, :long, :type, :color)",
                 routes,
             )
-        stops = [
+        stops: list[dict[str, object]] = [
             {
                 "version": version_id,
                 "id": stop.stop_id,
@@ -90,10 +89,9 @@ async def persist_and_activate(
             for stop in schedule.stops.values()
         ]
         if stops:
-            await connection.execute(
-                text(
-                    "INSERT INTO stops (feed_version_id, stop_id, name, latitude, longitude, position) VALUES (:version, :id, :name, :lat, :lon, CASE WHEN CAST(:lat AS double precision) IS NULL OR CAST(:lon AS double precision) IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision), CAST(:lat AS double precision)), 4326) END)"
-                ),
+            await insert_many(
+                connection,
+                "INSERT INTO stops (feed_version_id, stop_id, name, latitude, longitude, position) VALUES (:version, :id, :name, :lat, :lon, CASE WHEN CAST(:lat AS double precision) IS NULL OR CAST(:lon AS double precision) IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision), CAST(:lat AS double precision)), 4326) END)",
                 stops,
             )
         for service in schedule.services.values():
@@ -115,7 +113,7 @@ async def persist_and_activate(
                     "end": service.end_date,
                 },
             )
-        trips = [
+        trips: list[dict[str, object]] = [
             {
                 "version": version_id,
                 "id": trip.trip_id,
@@ -127,10 +125,9 @@ async def persist_and_activate(
             for trip in schedule.trips.values()
         ]
         if trips:
-            await connection.execute(
-                text(
-                    "INSERT INTO trips (feed_version_id, trip_id, route_id, service_id, shape_id, headsign) VALUES (:version, :id, :route, :service, :shape, :headsign)"
-                ),
+            await insert_many(
+                connection,
+                "INSERT INTO trips (feed_version_id, trip_id, route_id, service_id, shape_id, headsign) VALUES (:version, :id, :route, :service, :shape, :headsign)",
                 trips,
             )
         for (service_id, service_date), is_added in schedule.exceptions.items():
@@ -157,7 +154,7 @@ async def persist_and_activate(
             for stop_time in schedule.stop_times
         ]
         if stop_times:
-            await _insert_many(
+            await insert_many(
                 connection,
                 "INSERT INTO stop_times (feed_version_id, trip_id, stop_sequence, stop_id, arrival_seconds, departure_seconds) VALUES (:version, :trip, :sequence, :stop, :arrival, :departure)",
                 stop_times,
@@ -174,7 +171,7 @@ async def persist_and_activate(
             for sequence, latitude, longitude in points
         ]
         if shape_points:
-            await _insert_many(
+            await insert_many(
                 connection,
                 "INSERT INTO shape_points (feed_version_id, shape_id, sequence, latitude, longitude) VALUES (:version, :shape, :sequence, :lat, :lon)",
                 shape_points,

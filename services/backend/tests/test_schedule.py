@@ -3,10 +3,12 @@ import io
 import zipfile
 from collections.abc import AsyncGenerator
 from datetime import date
+from typing import cast
 
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
@@ -16,6 +18,15 @@ from transitpulse.schedule.importer import (
     import_archive,
     parse_gtfs_time,
 )
+from transitpulse.schedule.persistence import INSERT_CHUNK_SIZE, insert_many
+
+
+class RecordingConnection:
+    def __init__(self) -> None:
+        self.batches: list[list[dict[str, object]]] = []
+
+    async def execute(self, _: object, rows: list[dict[str, object]]) -> None:
+        self.batches.append(rows)
 
 
 def archive(files: dict[str, str]) -> bytes:
@@ -68,6 +79,15 @@ def test_rejects_unsafe_or_incomplete_archives(payload: bytes, code: str) -> Non
 def test_rejects_invalid_gtfs_time() -> None:
     with pytest.raises(GtfsValidationError):
         parse_gtfs_time("25:61:00")
+
+
+async def test_large_static_inserts_are_chunked() -> None:
+    connection = RecordingConnection()
+    rows: list[dict[str, object]] = [{"id": index} for index in range(INSERT_CHUNK_SIZE + 1)]
+
+    await insert_many(cast(AsyncConnection, connection), "INSERT INTO example VALUES (:id)", rows)
+
+    assert [len(batch) for batch in connection.batches] == [INSERT_CHUNK_SIZE, 1]
 
 
 async def test_download_records_provenance() -> None:
