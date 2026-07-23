@@ -23,7 +23,7 @@ class EventBroker:
     ) -> LiveEvent:
         event = LiveEvent(self.next_id, kind, route_id, stop_id, payload)
         self.next_id += 1
-        self.events = (self.events + [event])[-self.limit :]
+        self.events = [*self.events, event][-self.limit :]
         self.changed.set()
         return event
 
