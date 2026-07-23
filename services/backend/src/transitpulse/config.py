@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import RedisDsn
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "preview", "production"] = "development"
     database_url: str | None = None
     redis_url: RedisDsn | None = None
+    raw_snapshot_path: Path = Path("../../data/raw")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
 
