@@ -1,13 +1,18 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from time import monotonic
+from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from transitpulse.cache import RedisProbe
 from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
+from transitpulse.events import EventBroker
 from transitpulse.health import Probe, router
+from transitpulse.live_api import router as live_router
 from transitpulse.logging import configure_logging
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.api import router as schedule_router
@@ -47,6 +52,49 @@ def create_app(
     app.state.settings = application_settings
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.state.current_state = CurrentState()
+    app.state.pollers = {}
+    app.state.event_broker = EventBroker()
+    app.state.request_windows = {}
+
+    @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
+    async def request_context(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        client = request.client.host if request.client else "unknown"
+        now = monotonic()
+        window = [
+            moment
+            for moment in request.app.state.request_windows.get(client, [])
+            if now - moment < 60
+        ]
+        if len(window) >= 120:
+            return JSONResponse(
+                {"code": "RATE_LIMITED", "message": "Too many requests.", "request_id": request_id},
+                status_code=429,
+                headers={"Retry-After": "60", "X-Request-ID": request_id},
+            )
+        request.app.state.request_windows[client] = [*window, now]
+        try:
+            response = await call_next(request)
+        except Exception:
+            response = JSONResponse(
+                {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Unexpected service error.",
+                    "request_id": request_id,
+                },
+                status_code=500,
+            )
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = (
+            "no-store" if request.url.path.startswith("/api/v1/live") else "public, max-age=60"
+        )
+        return response
+
+    _ = request_context
+
     app.include_router(router)
     app.include_router(schedule_router)
+    app.include_router(live_router)
     return app
