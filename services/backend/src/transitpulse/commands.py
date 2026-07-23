@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 import httpx
 import structlog
@@ -64,7 +65,12 @@ async def import_static_feed() -> str:
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
             archive = await download_archive(settings.static_gtfs_url, client)
-        version_id = await persist_and_activate(engine, import_archive(archive.payload))
+        version_id = await persist_and_activate(
+            engine,
+            import_archive(archive.payload),
+            source_url=archive.source_url,
+            retrieved_at=datetime.fromisoformat(archive.retrieved_at),
+        )
         structlog.get_logger().info(
             "static_feed_imported",
             feed_version_id=version_id,
