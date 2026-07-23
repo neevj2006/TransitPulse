@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_url: str | None = None
     redis_url: RedisDsn | None = None
     raw_snapshot_path: Path = Path("../../data/raw")
+    vehicle_positions_url: str = "https://cdn.mbta.com/realtime/VehiclePositions.pb"
+    trip_updates_url: str = "https://cdn.mbta.com/realtime/TripUpdates.pb"
+    alerts_url: str = "https://cdn.mbta.com/realtime/Alerts.pb"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
 
