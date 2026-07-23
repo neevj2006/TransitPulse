@@ -9,6 +9,7 @@ from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
 from transitpulse.health import Probe, router
 from transitpulse.logging import configure_logging
+from transitpulse.schedule.api import router as schedule_router
 
 logger = structlog.get_logger()
 
@@ -45,4 +46,5 @@ def create_app(
     app.state.settings = application_settings
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.include_router(router)
+    app.include_router(schedule_router)
     return app
