@@ -45,6 +45,18 @@ async def test_cors_is_narrow_by_default(client: AsyncClient) -> None:
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
 
 
+async def test_invalid_requests_use_a_safe_consistent_problem_shape(client: AsyncClient) -> None:
+    response = await client.get(
+        "/api/v1/routes", params={"limit": 0}, headers={"X-Request-ID": "test"}
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "INVALID_REQUEST",
+        "message": "One or more request parameters are invalid.",
+        "request_id": "test",
+    }
+
+
 async def test_readiness_checks_dependencies(client: AsyncClient) -> None:
     response = await client.get("/health/ready")
     assert response.status_code == 200

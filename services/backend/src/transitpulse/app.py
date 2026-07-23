@@ -1,10 +1,12 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from time import monotonic
+from typing import cast
 from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
@@ -77,11 +79,39 @@ def create_app(
         max_age=600,
     )
 
+    @app.exception_handler(HTTPException)
+    async def http_problem(  # pyright: ignore[reportUnusedFunction]
+        request: Request, error: HTTPException
+    ) -> JSONResponse:
+        detail = cast(dict[str, str], error.detail) if isinstance(error.detail, dict) else {}
+        return JSONResponse(
+            {
+                "code": detail.get("code", "HTTP_ERROR"),
+                "message": detail.get("message", "Request could not be completed."),
+                "request_id": getattr(request.state, "request_id", None),
+            },
+            status_code=error.status_code,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_problem(  # pyright: ignore[reportUnusedFunction]
+        request: Request, _: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            {
+                "code": "INVALID_REQUEST",
+                "message": "One or more request parameters are invalid.",
+                "request_id": getattr(request.state, "request_id", None),
+            },
+            status_code=422,
+        )
+
     @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        request.state.request_id = request_id
         client = request.client.host if request.client else "unknown"
         now = monotonic()
         window = [
