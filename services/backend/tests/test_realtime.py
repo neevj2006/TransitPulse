@@ -155,7 +155,7 @@ async def test_poller_opens_a_bounded_circuit_after_repeated_failures(tmp_path: 
 
 
 async def test_live_vehicle_response_has_freshness() -> None:
-    app = create_app(Settings(environment="test"), probes=[])
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
     app.state.current_state.update_vehicles(
         [Vehicle("entity", "bus", "Red", None, 42.0, -71.0, datetime.now(UTC))]
     )
@@ -168,7 +168,7 @@ async def test_live_vehicle_response_has_freshness() -> None:
 
 
 async def test_live_vehicle_bounding_box_and_trip_progress() -> None:
-    app = create_app(Settings(environment="test"), probes=[])
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
     now = datetime.now(UTC)
     app.state.current_state.update_vehicles(
         [Vehicle("entity", "bus", "Red", "trip", 42.0, -71.0, now)]
@@ -194,7 +194,7 @@ async def test_live_vehicle_bounding_box_and_trip_progress() -> None:
 
 
 async def test_live_arrivals_are_scoped_to_the_requested_stop() -> None:
-    app = create_app(Settings(environment="test"), probes=[])
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
     now = datetime.now(UTC)
     app.state.current_state.update_trip_updates(
         [

@@ -1,10 +1,15 @@
 import os
+from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
+from transitpulse.schedule.models import Schedule
+from transitpulse.schedule.persistence import persist_and_activate
 
 
 @pytest.mark.integration
@@ -25,3 +30,34 @@ async def test_configured_dependencies_are_ready() -> None:
         "checks": {"postgresql": "ready", "valkey": "ready"},
         "status": "ready",
     }
+
+
+@pytest.mark.integration
+async def test_static_feed_version_activation_persists_provenance() -> None:
+    database_url = os.getenv("TP_DATABASE_URL")
+    if not database_url:
+        pytest.skip("PostgreSQL URL is not configured")
+    engine = create_async_engine(database_url)
+    schedule = Schedule(version="integration", checksum=uuid4().hex)
+    version_id = await persist_and_activate(
+        engine,
+        schedule,
+        source_url="https://example.test/gtfs.zip",
+    )
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text(
+                    "SELECT import_status, source_url, feed_label "
+                    "FROM static_feed_versions WHERE feed_version_id = :id"
+                ),
+                {"id": version_id},
+            )
+        assert result.one() == ("ACTIVE", "https://example.test/gtfs.zip", "integration")
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("DELETE FROM static_feed_versions WHERE feed_version_id = :id"),
+                {"id": version_id},
+            )
+        await engine.dispose()
