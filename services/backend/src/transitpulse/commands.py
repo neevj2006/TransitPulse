@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import structlog
 import uvicorn
 from alembic.config import main as alembic_main
@@ -10,6 +11,8 @@ from transitpulse.cache import RedisStateStore
 from transitpulse.config import get_settings
 from transitpulse.history import RealtimeHistoryStore
 from transitpulse.logging import configure_logging
+from transitpulse.schedule.importer import download_archive, import_archive
+from transitpulse.schedule.persistence import persist_and_activate
 from transitpulse.worker import run_worker as run_realtime_worker
 
 
@@ -50,3 +53,28 @@ def run_worker() -> None:
             settings.raw_snapshot_retention_hours,
         )
     )
+
+
+async def import_static_feed() -> str:
+    settings = get_settings()
+    if not settings.database_url:
+        raise RuntimeError("TP_DATABASE_URL is required to import a static feed")
+    configure_logging(settings.log_level)
+    engine = create_async_engine(settings.database_url)
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            archive = await download_archive(settings.static_gtfs_url, client)
+        version_id = await persist_and_activate(engine, import_archive(archive.payload))
+        structlog.get_logger().info(
+            "static_feed_imported",
+            feed_version_id=version_id,
+            checksum=archive.checksum,
+            source_url=archive.source_url,
+        )
+        return version_id
+    finally:
+        await engine.dispose()
+
+
+def run_static_import() -> None:
+    asyncio.run(import_static_feed())
