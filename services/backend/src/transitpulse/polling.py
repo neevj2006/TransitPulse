@@ -5,7 +5,7 @@ import gzip
 import hashlib
 import random
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -125,7 +125,10 @@ class FeedPoller:
             except (httpx.HTTPError, ValueError) as error:
                 self.health.failures += 1
                 if self.health.failures >= 3:
-                    self.health.circuit_open_until = datetime.now(UTC).replace(microsecond=0)
+                    cooldown_seconds = min(300, 2 ** min(self.health.failures, 8))
+                    self.health.circuit_open_until = datetime.now(UTC) + timedelta(
+                        seconds=cooldown_seconds
+                    )
                 return PollResult(
                     self.config.source_id,
                     started_at,

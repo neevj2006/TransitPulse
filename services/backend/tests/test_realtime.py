@@ -113,6 +113,23 @@ async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path
     assert "TransitPulse" in seen["user-agent"]
 
 
+async def test_poller_opens_a_bounded_circuit_after_repeated_failures(tmp_path: Path) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    poller = FeedPoller(
+        FeedConfig("vehicles", "https://example.test/feed"), RawSnapshotStore(tmp_path)
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await poller.poll(client)
+        await poller.poll(client)
+        result, _ = await poller.poll(client)
+        opened, _ = await poller.poll(client)
+    assert result.outcome == "ERROR"
+    assert poller.health.circuit_open_until is not None
+    assert opened.outcome == "CIRCUIT_OPEN"
+
+
 async def test_live_vehicle_response_has_freshness() -> None:
     app = create_app(Settings(environment="test"), probes=[])
     app.state.current_state.update_vehicles(
