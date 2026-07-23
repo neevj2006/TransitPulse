@@ -257,6 +257,7 @@ def import_archive(payload: bytes) -> Schedule:
                     _coordinate(row.get("shape_pt_lon", ""), -180, 180, "shape_pt_lon") or 0.0,
                 )
             )
+        transfer_pairs: set[tuple[str, str]] = set()
         for row in _rows(zf, "transfers.txt"):
             from_stop, to_stop = row.get("from_stop_id", ""), row.get("to_stop_id", "")
             if from_stop not in schedule.stops or to_stop not in schedule.stops:
@@ -270,5 +271,8 @@ def import_archive(payload: bytes) -> Schedule:
                 ) from error
             if transfer_type not in {0, 1, 2, 3, 4, 5} or (minimum is not None and minimum < 0):
                 raise GtfsValidationError("TRANSFER_INVALID", f"transfer {from_stop}:{to_stop}")
+            if (from_stop, to_stop) in transfer_pairs:
+                continue
+            transfer_pairs.add((from_stop, to_stop))
             schedule.transfers.append(Transfer(from_stop, to_stop, transfer_type, minimum))
         return schedule
