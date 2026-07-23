@@ -97,3 +97,9 @@ async def test_schedule_routes_search_shape_and_arrivals(schedule_client: AsyncC
         "/api/v1/stops/B/arrivals", params={"service_date": "2026-07-24"}
     )
     assert arrivals.json()["data"][0]["scheduled"]["gtfs_seconds"] == 86700
+    nearby = await schedule_client.get(
+        "/api/v1/stops/nearby", params={"latitude": 42.1, "longitude": -71.1}
+    )
+    assert nearby.json()["data"][0]["stop_id"] == "A"
+    detail = await schedule_client.get("/api/v1/stops/A")
+    assert detail.json()["data"]["route_ids"] == ["Red"]

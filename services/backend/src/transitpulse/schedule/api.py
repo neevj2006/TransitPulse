@@ -1,4 +1,5 @@
 from datetime import date
+from math import asin, cos, radians, sin, sqrt
 from typing import cast
 from uuid import uuid4
 
@@ -39,6 +40,16 @@ def _arrival_seconds(item: dict[str, object]) -> int:
         return 0
     seconds = cast(dict[str, object], scheduled).get("gtfs_seconds")
     return seconds if isinstance(seconds, int) else 0
+
+
+def _distance_metres(latitude: float, longitude: float, stop_lat: float, stop_lon: float) -> int:
+    latitude_delta = radians(stop_lat - latitude)
+    longitude_delta = radians(stop_lon - longitude)
+    a = (
+        sin(latitude_delta / 2) ** 2
+        + cos(radians(latitude)) * cos(radians(stop_lat)) * sin(longitude_delta / 2) ** 2
+    )
+    return round(6_371_000 * 2 * asin(sqrt(a)))
 
 
 @router.get("/routes", response_model=Envelope)
@@ -94,6 +105,49 @@ async def stops(
     else:
         items.sort(key=lambda stop: (stop.name, stop.stop_id))
     return _result([stop.__dict__ for stop in items[:limit]], schedule)
+
+
+@router.get("/stops/nearby", response_model=Envelope)
+async def nearby_stops(
+    request: Request,
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_metres: int = Query(750, ge=1, le=10_000),
+    limit: int = Query(20, ge=1, le=100),
+) -> Envelope:
+    schedule = _schedule(request)
+    items = [
+        (stop, _distance_metres(latitude, longitude, stop.latitude, stop.longitude))
+        for stop in schedule.stops.values()
+        if stop.latitude is not None and stop.longitude is not None
+    ]
+    items.sort(key=lambda item: (item[1], item[0].name, item[0].stop_id))
+    return _result(
+        [
+            {**stop.__dict__, "distance_metres": distance}
+            for stop, distance in items
+            if distance <= radius_metres
+        ][:limit],
+        schedule,
+    )
+
+
+@router.get("/stops/{stop_id}", response_model=Envelope)
+async def stop(request: Request, stop_id: str) -> Envelope:
+    schedule = _schedule(request)
+    item = schedule.stops.get(stop_id)
+    if not item:
+        raise HTTPException(
+            404, detail={"code": "STOP_NOT_FOUND", "message": "Stop was not found."}
+        )
+    route_ids = sorted(
+        {
+            schedule.trips[time.trip_id].route_id
+            for time in schedule.stop_times
+            if time.stop_id == stop_id
+        }
+    )
+    return _result({"stop": item.__dict__, "route_ids": route_ids}, schedule)
 
 
 @router.get("/stops/{stop_id}/arrivals", response_model=Envelope)
