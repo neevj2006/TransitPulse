@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from uuid import uuid4
 from time import monotonic
+from uuid import uuid4
 
 import structlog
 from fastapi import FastAPI, Request, Response
