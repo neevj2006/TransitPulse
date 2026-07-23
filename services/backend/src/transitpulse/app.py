@@ -50,6 +50,7 @@ def create_app(
     app.state.settings = application_settings
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.state.current_state = CurrentState()
+    app.state.pollers = {}
 
     @app.middleware("http")  # pyright: ignore[reportUnusedFunction]
     async def request_context(
