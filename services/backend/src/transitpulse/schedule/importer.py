@@ -230,7 +230,8 @@ def import_archive(payload: bytes) -> Schedule:
             if (
                 trip_id not in schedule.trips
                 or stop_id not in schedule.stops
-                or sequence <= previous.get(trip_id, 0)
+                or sequence < 0
+                or (trip_id in previous and sequence <= previous[trip_id])
             ):
                 raise GtfsValidationError("REFERENCE_MISSING", f"stop time {trip_id}:{sequence}")
             previous[trip_id] = sequence
@@ -267,7 +268,7 @@ def import_archive(payload: bytes) -> Schedule:
                 raise GtfsValidationError(
                     "TRANSFER_INVALID", f"transfer {from_stop}:{to_stop}"
                 ) from error
-            if transfer_type not in {0, 1, 2, 3} or (minimum is not None and minimum < 0):
+            if transfer_type not in {0, 1, 2, 3, 4, 5} or (minimum is not None and minimum < 0):
                 raise GtfsValidationError("TRANSFER_INVALID", f"transfer {from_stop}:{to_stop}")
             schedule.transfers.append(Transfer(from_stop, to_stop, transfer_type, minimum))
         return schedule
