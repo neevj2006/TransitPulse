@@ -3,9 +3,18 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from transitpulse.schedule.models import Schedule
+
+INSERT_CHUNK_SIZE = 5_000
+
+
+async def _insert_many(
+    connection: AsyncConnection, statement: str, rows: list[dict[str, object]]
+) -> None:
+    for start in range(0, len(rows), INSERT_CHUNK_SIZE):
+        await connection.execute(text(statement), rows[start : start + INSERT_CHUNK_SIZE])
 
 
 async def persist_and_activate(
@@ -136,7 +145,7 @@ async def persist_and_activate(
                     "added": is_added,
                 },
             )
-        stop_times = [
+        stop_times: list[dict[str, object]] = [
             {
                 "version": version_id,
                 "trip": stop_time.trip_id,
@@ -148,13 +157,12 @@ async def persist_and_activate(
             for stop_time in schedule.stop_times
         ]
         if stop_times:
-            await connection.execute(
-                text(
-                    "INSERT INTO stop_times (feed_version_id, trip_id, stop_sequence, stop_id, arrival_seconds, departure_seconds) VALUES (:version, :trip, :sequence, :stop, :arrival, :departure)"
-                ),
+            await _insert_many(
+                connection,
+                "INSERT INTO stop_times (feed_version_id, trip_id, stop_sequence, stop_id, arrival_seconds, departure_seconds) VALUES (:version, :trip, :sequence, :stop, :arrival, :departure)",
                 stop_times,
             )
-        shape_points = [
+        shape_points: list[dict[str, object]] = [
             {
                 "version": version_id,
                 "shape": shape_id,
@@ -166,10 +174,9 @@ async def persist_and_activate(
             for sequence, latitude, longitude in points
         ]
         if shape_points:
-            await connection.execute(
-                text(
-                    "INSERT INTO shape_points (feed_version_id, shape_id, sequence, latitude, longitude) VALUES (:version, :shape, :sequence, :lat, :lon)"
-                ),
+            await _insert_many(
+                connection,
+                "INSERT INTO shape_points (feed_version_id, shape_id, sequence, latitude, longitude) VALUES (:version, :shape, :sequence, :lat, :lon)",
                 shape_points,
             )
         for transfer in schedule.transfers:
