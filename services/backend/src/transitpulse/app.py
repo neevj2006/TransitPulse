@@ -1,8 +1,10 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from transitpulse.cache import RedisProbe
 from transitpulse.config import Settings, get_settings
@@ -48,6 +50,29 @@ def create_app(
     app.state.settings = application_settings
     app.state.probes = probes if probes is not None else build_probes(application_settings)
     app.state.current_state = CurrentState()
+
+    @app.middleware("http")
+    async def request_context(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # pyright: ignore[reportUnusedFunction]
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        try:
+            response = await call_next(request)
+        except Exception:
+            response = JSONResponse(
+                {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Unexpected service error.",
+                    "request_id": request_id,
+                },
+                status_code=500,
+            )
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = (
+            "no-store" if request.url.path.startswith("/api/v1/live") else "public, max-age=60"
+        )
+        return response
+
     app.include_router(router)
     app.include_router(schedule_router)
     app.include_router(live_router)
