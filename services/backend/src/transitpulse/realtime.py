@@ -2,7 +2,7 @@
 """Small, testable GTFS-Realtime normalization and current-state projection."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from google.transit import gtfs_realtime_pb2
 
@@ -50,6 +50,16 @@ class RealtimeValidationError(ValueError):
     pass
 
 
+MAX_FUTURE_SOURCE_SKEW = timedelta(minutes=5)
+
+
+def _source_timestamp(value: int) -> datetime | None:
+    if not value:
+        return None
+    timestamp = datetime.fromtimestamp(value, UTC)
+    return None if timestamp > datetime.now(UTC) + MAX_FUTURE_SOURCE_SKEW else timestamp
+
+
 def parse_vehicle_positions(payload: bytes) -> list[Vehicle]:
     feed = gtfs_realtime_pb2.FeedMessage()
     try:
@@ -66,7 +76,9 @@ def parse_vehicle_positions(payload: bytes) -> list[Vehicle]:
         latitude, longitude = vehicle.position.latitude, vehicle.position.longitude
         if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
             continue
-        timestamp = datetime.fromtimestamp(vehicle.timestamp, UTC) if vehicle.timestamp else None
+        timestamp = _source_timestamp(vehicle.timestamp)
+        if vehicle.timestamp and timestamp is None:
+            continue
         vehicles.append(
             Vehicle(
                 entity.id,
@@ -113,13 +125,16 @@ def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
                     str(stop_time.schedule_relationship),
                 )
             )
+        timestamp = _source_timestamp(update.timestamp)
+        if update.timestamp and timestamp is None:
+            continue
         results.append(
             TripUpdate(
                 entity.id,
                 update.trip.trip_id,
                 update.trip.route_id or None,
                 update.vehicle.id or None,
-                datetime.fromtimestamp(update.timestamp, UTC) if update.timestamp else None,
+                timestamp,
                 str(update.trip.schedule_relationship),
                 tuple(predictions),
             )
