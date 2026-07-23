@@ -39,3 +39,9 @@ available at `http://127.0.0.1:8000/health/live`.
 Environment examples contain placeholders or non-secret public defaults only.
 Local `.env` files are ignored. Development, preview, and production
 environments must use separate values and credentials.
+
+## Deployment
+
+The web application uses Vercel's native GitHub integration: pull requests
+receive previews and merges to `main` update production. See the
+[deployment guide](docs/deployment.md).
