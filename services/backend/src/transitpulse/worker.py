@@ -1,14 +1,56 @@
 import asyncio
-from collections.abc import Callable, Sized
+import json
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import structlog
 
+from transitpulse.cache import RedisStateStore
+from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
-from transitpulse.realtime import parse_alerts, parse_trip_updates, parse_vehicle_positions
+from transitpulse.realtime import (
+    Alert,
+    CurrentState,
+    TripUpdate,
+    Vehicle,
+    parse_alerts,
+    parse_trip_updates,
+    parse_vehicle_positions,
+)
 
 logger = structlog.get_logger()
+
+
+class RealtimeProjector:
+    """Applies validated feed entities to bounded current state and optional Redis."""
+
+    def __init__(
+        self, state: CurrentState, broker: EventBroker, cache: RedisStateStore | None = None
+    ) -> None:
+        self.state, self.broker, self.cache = state, broker, cache
+
+    async def project(
+        self, source_id: str, values: list[Vehicle] | list[TripUpdate] | list[Alert]
+    ) -> None:
+        if source_id.endswith("vehicles"):
+            changed = self.state.update_vehicles(values)  # type: ignore[arg-type]
+            for item in changed:
+                if self.cache:
+                    await self.cache.put_vehicle(item)
+                self.broker.publish(
+                    "vehicle.changed", json.dumps({"vehicle_id": item.vehicle_id}), item.route_id
+                )
+        elif source_id.endswith("trip-updates"):
+            self.state.update_trip_updates(values)  # type: ignore[arg-type]
+            if self.cache:
+                await self.cache.put_trip_updates(values)  # type: ignore[arg-type]
+        else:
+            self.state.update_alerts(values)  # type: ignore[arg-type]
+            if self.cache:
+                await self.cache.put_alerts(values)  # type: ignore[arg-type]
+        self.state.expire(datetime.now(UTC))
 
 
 def build_pollers(
@@ -23,7 +65,10 @@ def build_pollers(
 
 
 async def run_poller(
-    poller: FeedPoller, parser: Callable[[bytes], Sized], stop: asyncio.Event
+    poller: FeedPoller,
+    parser: Callable[[bytes], list[Vehicle] | list[TripUpdate] | list[Alert]],
+    stop: asyncio.Event,
+    projector: RealtimeProjector,
 ) -> None:
     async with httpx.AsyncClient(follow_redirects=True) as client:
         while not stop.is_set():
@@ -31,6 +76,7 @@ async def run_poller(
             if payload:
                 try:
                     parsed = parser(payload)
+                    await projector.project(poller.config.source_id, parsed)
                     logger.info(
                         "feed_processed",
                         source_id=poller.config.source_id,
@@ -45,11 +91,22 @@ async def run_poller(
                 pass
 
 
-async def run_worker(raw_path: Path, vehicle_url: str, trip_url: str, alert_url: str) -> None:
+async def run_worker(
+    raw_path: Path,
+    vehicle_url: str,
+    trip_url: str,
+    alert_url: str,
+    cache: RedisStateStore | None = None,
+) -> None:
     stop = asyncio.Event()
     pollers = build_pollers(raw_path, vehicle_url, trip_url, alert_url)
-    await asyncio.gather(
-        run_poller(pollers["mbta-vehicles"], parse_vehicle_positions, stop),
-        run_poller(pollers["mbta-trip-updates"], parse_trip_updates, stop),
-        run_poller(pollers["mbta-alerts"], parse_alerts, stop),
-    )
+    projector = RealtimeProjector(CurrentState(), EventBroker(), cache)
+    try:
+        await asyncio.gather(
+            run_poller(pollers["mbta-vehicles"], parse_vehicle_positions, stop, projector),
+            run_poller(pollers["mbta-trip-updates"], parse_trip_updates, stop, projector),
+            run_poller(pollers["mbta-alerts"], parse_alerts, stop, projector),
+        )
+    finally:
+        if cache:
+            await cache.close()

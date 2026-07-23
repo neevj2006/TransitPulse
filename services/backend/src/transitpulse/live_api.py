@@ -1,9 +1,11 @@
+import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from transitpulse.cache import RedisStateStore
 from transitpulse.events import EventBroker
 from transitpulse.realtime import CurrentState
 
@@ -36,10 +38,16 @@ async def events(
     async def heartbeat():
         broker: EventBroker = request.app.state.event_broker
         last_event = int(request.headers.get("last-event-id", "0"))
-        for item in broker.since(last_event, route_id, stop_id):
-            yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
-            last_event = item.event_id
-        yield f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
+        while not await request.is_disconnected():
+            replay = broker.since(last_event, route_id, stop_id)
+            for item in replay:
+                yield f"event: {item.kind}\nid: {item.event_id}\ndata: {item.payload}\n\n"
+                last_event = item.event_id
+            broker.changed.clear()
+            try:
+                await asyncio.wait_for(broker.changed.wait(), timeout=20)
+            except TimeoutError:
+                yield f'event: heartbeat\nid: {last_event}\ndata: {{"schema_version":"1.0.0"}}\n\n'
 
     return StreamingResponse(
         heartbeat(),
@@ -52,8 +60,12 @@ async def events(
 async def vehicles(request: Request, route_id: str) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state
     now = datetime.now(UTC)
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    source_vehicles = (
+        await cache.route_vehicles(route_id) if cache else state.route_vehicles(route_id)
+    )
     values: list[dict[str, object]] = []
-    for vehicle in state.route_vehicles(route_id):
+    for vehicle in source_vehicles:
         age = (
             int((now - vehicle.source_timestamp).total_seconds())
             if vehicle.source_timestamp
