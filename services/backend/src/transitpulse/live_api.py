@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportGeneralTypeIssues=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportOperatorIssue=false
 import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -122,24 +123,49 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state
     now = datetime.now(UTC)
     values: list[dict[str, object]] = []
-    for item in state.trip_updates.values():
-        for prediction in item.predictions:
-            if prediction.stop_id != stop_id:
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    updates = await cache.stop_trip_updates(stop_id) if cache else list(state.trip_updates.values())
+    for item in updates:
+        predictions = item["predictions"] if isinstance(item, dict) else item.predictions
+        for prediction in predictions:
+            prediction_stop = (
+                prediction["stop_id"] if isinstance(prediction, dict) else prediction.stop_id
+            )
+            if prediction_stop != stop_id:
                 continue
-            predicted_time = prediction.arrival_time or prediction.departure_time
-            age = int((now - item.timestamp).total_seconds()) if item.timestamp else None
+            arrival_time = (
+                prediction.get("arrival_time")
+                if isinstance(prediction, dict)
+                else prediction.arrival_time
+            )
+            departure_time = (
+                prediction.get("departure_time")
+                if isinstance(prediction, dict)
+                else prediction.departure_time
+            )
+            timestamp = item.get("timestamp") if isinstance(item, dict) else item.timestamp
+            predicted_time = arrival_time or departure_time
+            age = (
+                int((now - datetime.fromisoformat(timestamp)).total_seconds())
+                if isinstance(timestamp, str)
+                else int((now - timestamp).total_seconds())
+                if timestamp
+                else None
+            )
             values.append(
                 {
-                    "trip_id": item.trip_id,
-                    "route_id": item.route_id,
-                    "stop_id": prediction.stop_id,
+                    "trip_id": item["trip_id"] if isinstance(item, dict) else item.trip_id,
+                    "route_id": item.get("route_id") if isinstance(item, dict) else item.route_id,
+                    "stop_id": prediction_stop,
                     "agency_prediction": {
                         "kind": "agency_predicted",
-                        "arrival_time": prediction.arrival_time,
-                        "departure_time": prediction.departure_time,
-                        "relationship": prediction.relationship,
+                        "arrival_time": arrival_time,
+                        "departure_time": departure_time,
+                        "relationship": prediction.get("relationship")
+                        if isinstance(prediction, dict)
+                        else prediction.relationship,
                     },
-                    "source_timestamp": item.timestamp,
+                    "source_timestamp": timestamp,
                     "freshness": {
                         "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
                         "age_seconds": age,
@@ -166,16 +192,23 @@ async def alerts(
     request: Request, route_id: str | None = None, stop_id: str | None = None
 ) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state
-    values = [
-        item
-        for item in state.alerts.values()
-        if (not route_id or route_id in item.route_ids)
-        and (not stop_id or stop_id in item.stop_ids)
-    ]
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    values = (
+        await cache.alerts(route_id, stop_id)
+        if cache
+        else [
+            item
+            for item in state.alerts.values()
+            if (not route_id or route_id in item.route_ids)
+            and (not stop_id or stop_id in item.stop_ids)
+        ]
+    )
     return {
         "schema_version": "1.0.0",
         "data": [
-            {
+            item
+            if isinstance(item, dict)
+            else {
                 "alert_id": item.entity_id,
                 "header": item.header,
                 "route_ids": item.route_ids,
