@@ -3,8 +3,11 @@ import hashlib
 import io
 import re
 import zipfile
-from datetime import date
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import PurePosixPath
+
+import httpx
 
 from transitpulse.schedule.models import Route, Schedule, Service, Stop, StopTime, Trip
 
@@ -18,6 +21,39 @@ class GtfsValidationError(ValueError):
     def __init__(self, code: str, detail: str) -> None:
         super().__init__(f"{code}: {detail}")
         self.code = code
+
+
+@dataclass(frozen=True)
+class DownloadedArchive:
+    payload: bytes
+    source_url: str
+    retrieved_at: str
+    checksum: str
+
+
+async def download_archive(
+    url: str, client: httpx.AsyncClient, maximum_bytes: int = MAX_ARCHIVE_BYTES
+) -> DownloadedArchive:
+    try:
+        async with client.stream(
+            "GET",
+            url,
+            headers={"User-Agent": "TransitPulse/0.1 (https://github.com/neevj2006/TransitPulse)"},
+            timeout=httpx.Timeout(15, read=45),
+        ) as response:
+            response.raise_for_status()
+            payload = b""
+            async for chunk in response.aiter_bytes():
+                payload += chunk
+                if len(payload) > maximum_bytes:
+                    raise GtfsValidationError(
+                        "PAYLOAD_TOO_LARGE", "download exceeds maximum archive size"
+                    )
+    except httpx.HTTPError as error:
+        raise GtfsValidationError("SOURCE_HTTP_ERROR", str(error)) from error
+    return DownloadedArchive(
+        payload, url, datetime.now(UTC).isoformat(), hashlib.sha256(payload).hexdigest()
+    )
 
 
 def parse_gtfs_time(value: str) -> int | None:
