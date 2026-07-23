@@ -127,6 +127,10 @@ class RedisStateStore:
                 values.append(cast(dict[str, object], json.loads(raw)))
         return values
 
+    async def trip_update(self, trip_id: str) -> dict[str, object] | None:
+        raw = await self.client.get(f"tp:v1:{{mbta}}:trip:{trip_id}")  # pyright: ignore[reportUnknownMemberType]
+        return cast(dict[str, object], json.loads(raw)) if raw else None
+
     async def put_alerts(self, values: list[Alert], ttl_seconds: int = 600) -> None:
         for item in values:
             payload = {
