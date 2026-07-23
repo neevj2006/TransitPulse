@@ -1,4 +1,5 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportAttributeAccessIssue=false
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -122,6 +123,18 @@ async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path
     assert payload == b"payload"
     assert list(tmp_path.rglob("*.pb.gz"))  # noqa: ASYNC240
     assert "TransitPulse" in seen["user-agent"]
+
+
+def test_raw_snapshot_pruning_removes_only_expired_payloads(tmp_path: Path) -> None:
+    store = RawSnapshotStore(tmp_path)
+    old = tmp_path / "source" / "old.pb.gz"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"old")
+    old_time = (datetime.now(UTC) - timedelta(hours=7)).timestamp()
+    os.utime(old, (old_time, old_time))
+    store.save("source", b"new", datetime.now(UTC))
+    assert store.prune(datetime.now(UTC) - timedelta(hours=6)) == 1
+    assert list(tmp_path.rglob("*.pb.gz"))
 
 
 async def test_poller_opens_a_bounded_circuit_after_repeated_failures(tmp_path: Path) -> None:

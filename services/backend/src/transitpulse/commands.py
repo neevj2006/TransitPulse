@@ -47,5 +47,6 @@ def run_worker() -> None:
             settings.alerts_url,
             cache,
             history,
+            settings.raw_snapshot_retention_hours,
         )
     )
