@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from transitpulse.cache import RedisStateStore
 from transitpulse.events import EventBroker
 from transitpulse.realtime import CurrentState
+from transitpulse.schedule.models import Schedule
 
 router = APIRouter(prefix="/api/v1/live", tags=["realtime"])
 
@@ -234,6 +235,29 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
                 }
             )
     values.sort(key=lambda value: str(value.pop("sort_timestamp")))
+    if not values:
+        schedule: Schedule | None = getattr(request.app.state, "schedule", None)
+        if schedule:
+            service_date = now.date()
+            active = schedule.active_service_ids(service_date)
+            for stop_time in schedule.stop_times:
+                trip = schedule.trips[stop_time.trip_id]
+                if stop_time.stop_id == stop_id and trip.service_id in active:
+                    values.append(
+                        {
+                            "trip_id": trip.trip_id,
+                            "route_id": trip.route_id,
+                            "stop_id": stop_id,
+                            "agency_prediction": None,
+                            "scheduled_fallback": {
+                                "kind": "scheduled_fallback",
+                                "reason": "LIVE_PREDICTION_UNAVAILABLE",
+                                "service_date": service_date.isoformat(),
+                                "gtfs_seconds": stop_time.arrival_seconds
+                                or stop_time.departure_seconds,
+                            },
+                        }
+                    )
     return {
         "schema_version": "1.0.0",
         "data": values[:100],
