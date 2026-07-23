@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --canvas: #f5f7fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #eef2f6;
+  --surface-sunken: #e7edf4;
+  --text: #142033;
+  --text-muted: #526173;
+  --text-subtle: #607083;
+  --text-inverse: #ffffff;
+  --border: #d6dee8;
+  --border-strong: #7b899b;
+  --brand: #1859c9;
+  --brand-strong: #1859c9;
+  --brand-hover: #124aa9;
+  --brand-active: #0e3b88;
+  --brand-soft: #eaf1ff;
+  --brand-soft-text: #13479f;
+  --focus-outer: #1859c9;
+  --focus-inner: #ffffff;
+  --status-success: #146b35;
+  --status-success-surface: #e7f6ea;
+  --status-unknown: #526173;
+  --status-unknown-surface: #eef2f6;
+}
+
+.dark {
+  color-scheme: dark;
+  --canvas: #0b111b;
+  --surface: #111a27;
+  --surface-raised: #172232;
+  --surface-muted: #1b2736;
+  --surface-sunken: #080d15;
+  --text: #edf3fa;
+  --text-muted: #a8b5c5;
+  --text-subtle: #8796a8;
+  --text-inverse: #09111f;
+  --border: #2b394a;
+  --border-strong: #8290a5;
+  --brand: #78a9ff;
+  --brand-strong: #2f6bd3;
+  --brand-hover: #8db6ff;
+  --brand-active: #a4c5ff;
+  --brand-soft: #14284b;
+  --brand-soft-text: #a9c7ff;
+  --focus-outer: #8db6ff;
+  --focus-inner: #0b111b;
+  --status-success: #86e6a8;
+  --status-success-surface: #123522;
+  --status-unknown: #b9c4d1;
+  --status-unknown-surface: #1b2532;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-inverse: var(--text-inverse);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-text: var(--brand-soft-text);
+  --color-focus-outer: var(--focus-outer);
+  --color-focus-inner: var(--focus-inner);
+  --color-status-success: var(--status-success);
+  --color-status-success-surface: var(--status-success-surface);
+  --color-status-unknown: var(--status-unknown);
+  --color-status-unknown-surface: var(--status-unknown-surface);
+  --font-sans: "Geist", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  min-width: 20rem;
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: "Geist", sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-inner);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
