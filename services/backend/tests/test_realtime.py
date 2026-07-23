@@ -35,6 +35,17 @@ def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
     assert parse_vehicle_positions(feed.SerializeToString())[0].route_id == "Red"
 
 
+def test_rejects_future_dated_realtime_entities() -> None:
+    feed = gtfs_realtime_pb2.FeedMessage()
+    feed.header.gtfs_realtime_version = "2.0"
+    entity = feed.entity.add(id="entity")
+    entity.vehicle.vehicle.id = "vehicle"
+    entity.vehicle.position.latitude = 42.0
+    entity.vehicle.position.longitude = -71.0
+    entity.vehicle.timestamp = int((datetime.now(UTC) + timedelta(minutes=6)).timestamp())
+    assert parse_vehicle_positions(feed.SerializeToString()) == []
+
+
 def test_parses_trip_updates_and_alerts() -> None:
     trip_feed = gtfs_realtime_pb2.FeedMessage()
     trip_feed.header.gtfs_realtime_version = "2.0"
