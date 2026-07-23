@@ -3,6 +3,13 @@ from datetime import date
 
 
 @dataclass(frozen=True)
+class Agency:
+    agency_id: str
+    name: str
+    timezone: str
+
+
+@dataclass(frozen=True)
 class Route:
     route_id: str
     short_name: str | None
@@ -39,6 +46,14 @@ class StopTime:
 
 
 @dataclass(frozen=True)
+class Transfer:
+    from_stop_id: str
+    to_stop_id: str
+    transfer_type: int
+    minimum_transfer_seconds: int | None
+
+
+@dataclass(frozen=True)
 class Service:
     service_id: str
     weekdays: tuple[bool, bool, bool, bool, bool, bool, bool]
@@ -51,12 +66,14 @@ class Schedule:
     version: str
     checksum: str
     routes: dict[str, Route] = field(default_factory=lambda: {})
+    agencies: dict[str, Agency] = field(default_factory=lambda: {})
     stops: dict[str, Stop] = field(default_factory=lambda: {})
     trips: dict[str, Trip] = field(default_factory=lambda: {})
     stop_times: list[StopTime] = field(default_factory=lambda: [])
     services: dict[str, Service] = field(default_factory=lambda: {})
     exceptions: dict[tuple[str, date], bool] = field(default_factory=lambda: {})
     shapes: dict[str, list[tuple[int, float, float]]] = field(default_factory=lambda: {})
+    transfers: list[Transfer] = field(default_factory=lambda: [])
 
     def active_service_ids(self, service_date: date) -> set[str]:
         active: set[str] = set()
