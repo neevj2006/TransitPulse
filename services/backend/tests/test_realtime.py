@@ -7,6 +7,7 @@ from google.transit import gtfs_realtime_pb2
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
+from transitpulse.diagnostics import vehicle_quality
 from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
@@ -71,6 +72,20 @@ def test_unreconciled_vehicle_is_explicit() -> None:
     )
     assert result.state == "UNRECONCILED"
     assert result.reason == "ROUTE_UNRECONCILED"
+
+
+def test_vehicle_quality_flags_frozen_and_impossible_jumps() -> None:
+    now = datetime.now(UTC)
+    frozen = vehicle_quality(
+        Vehicle("a", "v", "Red", None, 42, -71, now),
+        Vehicle("b", "v", "Red", None, 42, -71, now + timedelta(minutes=6)),
+    )
+    jumped = vehicle_quality(
+        Vehicle("a", "v", "Red", None, 42, -71, now),
+        Vehicle("b", "v", "Red", None, 43, -72, now + timedelta(seconds=10)),
+    )
+    assert "VEHICLE_FROZEN" in frozen
+    assert "VEHICLE_IMPOSSIBLE_JUMP" in jumped
 
 
 async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path) -> None:
