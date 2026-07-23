@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     redis_url: RedisDsn | None = None
     raw_snapshot_path: Path = Path("../../data/raw")
     raw_snapshot_retention_hours: int = 6
+    detailed_history_retention_days: int = 14
     static_gtfs_url: str = "https://cdn.mbta.com/MBTA_GTFS.zip"
     vehicle_positions_url: str = "https://cdn.mbta.com/realtime/VehiclePositions.pb"
     trip_updates_url: str = "https://cdn.mbta.com/realtime/TripUpdates.pb"
