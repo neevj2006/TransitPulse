@@ -12,6 +12,8 @@ from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
+    StopPrediction,
+    TripUpdate,
     Vehicle,
     parse_alerts,
     parse_trip_updates,
@@ -39,7 +41,12 @@ def test_parses_trip_updates_and_alerts() -> None:
     update = trip_feed.entity.add(id="update").trip_update
     update.trip.trip_id = "trip"
     update.trip.route_id = "Red"
-    assert parse_trip_updates(trip_feed.SerializeToString())[0].trip_id == "trip"
+    prediction = update.stop_time_update.add()
+    prediction.stop_id = "stop"
+    prediction.arrival.time = 1_700_000_000
+    parsed_update = parse_trip_updates(trip_feed.SerializeToString())[0]
+    assert parsed_update.trip_id == "trip"
+    assert parsed_update.predictions[0].stop_id == "stop"
     alert_feed = gtfs_realtime_pb2.FeedMessage()
     alert_feed.header.gtfs_realtime_version = "2.0"
     alert = alert_feed.entity.add(id="alert").alert
@@ -117,6 +124,30 @@ async def test_live_vehicle_response_has_freshness() -> None:
         response = await client.get("/api/v1/live/routes/Red/vehicles")
     assert response.status_code == 200
     assert response.json()["data"][0]["freshness"]["state"] == "HEALTHY"
+
+
+async def test_live_arrivals_are_scoped_to_the_requested_stop() -> None:
+    app = create_app(Settings(environment="test"), probes=[])
+    now = datetime.now(UTC)
+    app.state.current_state.update_trip_updates(
+        [
+            TripUpdate(
+                "update",
+                "trip",
+                "Red",
+                None,
+                now,
+                "0",
+                (StopPrediction("target", 1, now + timedelta(minutes=2), None, "0"),),
+            )
+        ]
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/live/stops/target/arrivals")
+    assert response.status_code == 200
+    assert response.json()["data"][0]["stop_id"] == "target"
 
 
 def test_event_broker_scopes_and_replays_monotonic_events() -> None:

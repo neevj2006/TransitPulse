@@ -19,6 +19,15 @@ class Vehicle:
 
 
 @dataclass(frozen=True)
+class StopPrediction:
+    stop_id: str
+    stop_sequence: int | None
+    arrival_time: datetime | None
+    departure_time: datetime | None
+    relationship: str
+
+
+@dataclass(frozen=True)
 class TripUpdate:
     entity_id: str
     trip_id: str
@@ -26,6 +35,7 @@ class TripUpdate:
     vehicle_id: str | None
     timestamp: datetime | None
     relationship: str
+    predictions: tuple[StopPrediction, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,6 +96,23 @@ def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
         ):
             continue
         update = entity.trip_update
+        predictions: list[StopPrediction] = []
+        for stop_time in update.stop_time_update:
+            if not stop_time.stop_id:
+                continue
+            predictions.append(
+                StopPrediction(
+                    stop_time.stop_id,
+                    stop_time.stop_sequence or None,
+                    datetime.fromtimestamp(stop_time.arrival.time, UTC)
+                    if stop_time.arrival.time
+                    else None,
+                    datetime.fromtimestamp(stop_time.departure.time, UTC)
+                    if stop_time.departure.time
+                    else None,
+                    str(stop_time.schedule_relationship),
+                )
+            )
         results.append(
             TripUpdate(
                 entity.id,
@@ -94,6 +121,7 @@ def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
                 update.vehicle.id or None,
                 datetime.fromtimestamp(update.timestamp, UTC) if update.timestamp else None,
                 str(update.trip.schedule_relationship),
+                tuple(predictions),
             )
         )
     return results
