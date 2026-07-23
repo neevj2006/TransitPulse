@@ -16,6 +16,15 @@ router = APIRouter(prefix="/api/v1/live", tags=["realtime"])
 async def health(request: Request) -> dict[str, object]:
     pollers = getattr(request.app.state, "pollers", {})
     now = datetime.now(UTC)
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    source_ids = ("mbta-vehicles", "mbta-trip-updates", "mbta-alerts")
+    if cache:
+        values = [await cache.source_health(source_id) for source_id in source_ids]
+        return {
+            "schema_version": "1.0.0",
+            "data": [value for value in values if value],
+            "meta": {"request_id": str(uuid4()), "generated_at": now},
+        }
     return {
         "schema_version": "1.0.0",
         "data": [
