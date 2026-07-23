@@ -78,3 +78,11 @@ class RealtimeHistoryStore:
                 ),
                 rows,
             )
+
+    async def prune_observations(self, before: datetime) -> int:
+        async with self.engine.begin() as connection:
+            result = await connection.execute(
+                text("DELETE FROM vehicle_observations WHERE retrieved_at < :before"),
+                {"before": before},
+            )
+        return result.rowcount or 0

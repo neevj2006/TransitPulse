@@ -52,6 +52,7 @@ def run_worker() -> None:
             cache,
             history,
             settings.raw_snapshot_retention_hours,
+            settings.detailed_history_retention_days,
         )
     )
 
