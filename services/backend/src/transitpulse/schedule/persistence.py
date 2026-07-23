@@ -52,32 +52,40 @@ async def persist_and_activate(
                     "timezone": agency.timezone,
                 },
             )
-        for route in schedule.routes.values():
+        routes = [
+            {
+                "version": version_id,
+                "id": route.route_id,
+                "short": route.short_name,
+                "long": route.long_name,
+                "type": route.route_type,
+                "color": route.color,
+            }
+            for route in schedule.routes.values()
+        ]
+        if routes:
             await connection.execute(
                 text(
                     "INSERT INTO routes (feed_version_id, route_id, short_name, long_name, route_type, source_color) VALUES (:version, :id, :short, :long, :type, :color)"
                 ),
-                {
-                    "version": version_id,
-                    "id": route.route_id,
-                    "short": route.short_name,
-                    "long": route.long_name,
-                    "type": route.route_type,
-                    "color": route.color,
-                },
+                routes,
             )
-        for stop in schedule.stops.values():
+        stops = [
+            {
+                "version": version_id,
+                "id": stop.stop_id,
+                "name": stop.name,
+                "lat": stop.latitude,
+                "lon": stop.longitude,
+            }
+            for stop in schedule.stops.values()
+        ]
+        if stops:
             await connection.execute(
                 text(
-                    "INSERT INTO stops (feed_version_id, stop_id, name, latitude, longitude, position) VALUES (:version, :id, :name, :lat, :lon, CASE WHEN :lat IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) END)"
+                    "INSERT INTO stops (feed_version_id, stop_id, name, latitude, longitude, position) VALUES (:version, :id, :name, :lat, :lon, CASE WHEN CAST(:lat AS double precision) IS NULL OR CAST(:lon AS double precision) IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(CAST(:lon AS double precision), CAST(:lat AS double precision)), 4326) END)"
                 ),
-                {
-                    "version": version_id,
-                    "id": stop.stop_id,
-                    "name": stop.name,
-                    "lat": stop.latitude,
-                    "lon": stop.longitude,
-                },
+                stops,
             )
         for service in schedule.services.values():
             await connection.execute(
@@ -98,19 +106,23 @@ async def persist_and_activate(
                     "end": service.end_date,
                 },
             )
-        for trip in schedule.trips.values():
+        trips = [
+            {
+                "version": version_id,
+                "id": trip.trip_id,
+                "route": trip.route_id,
+                "service": trip.service_id,
+                "shape": trip.shape_id,
+                "headsign": trip.headsign,
+            }
+            for trip in schedule.trips.values()
+        ]
+        if trips:
             await connection.execute(
                 text(
                     "INSERT INTO trips (feed_version_id, trip_id, route_id, service_id, shape_id, headsign) VALUES (:version, :id, :route, :service, :shape, :headsign)"
                 ),
-                {
-                    "version": version_id,
-                    "id": trip.trip_id,
-                    "route": trip.route_id,
-                    "service": trip.service_id,
-                    "shape": trip.shape_id,
-                    "headsign": trip.headsign,
-                },
+                trips,
             )
         for (service_id, service_date), is_added in schedule.exceptions.items():
             await connection.execute(
@@ -124,34 +136,42 @@ async def persist_and_activate(
                     "added": is_added,
                 },
             )
-        for stop_time in schedule.stop_times:
+        stop_times = [
+            {
+                "version": version_id,
+                "trip": stop_time.trip_id,
+                "sequence": stop_time.sequence,
+                "stop": stop_time.stop_id,
+                "arrival": stop_time.arrival_seconds,
+                "departure": stop_time.departure_seconds,
+            }
+            for stop_time in schedule.stop_times
+        ]
+        if stop_times:
             await connection.execute(
                 text(
                     "INSERT INTO stop_times (feed_version_id, trip_id, stop_sequence, stop_id, arrival_seconds, departure_seconds) VALUES (:version, :trip, :sequence, :stop, :arrival, :departure)"
                 ),
-                {
-                    "version": version_id,
-                    "trip": stop_time.trip_id,
-                    "sequence": stop_time.sequence,
-                    "stop": stop_time.stop_id,
-                    "arrival": stop_time.arrival_seconds,
-                    "departure": stop_time.departure_seconds,
-                },
+                stop_times,
             )
-        for shape_id, points in schedule.shapes.items():
-            for sequence, latitude, longitude in points:
-                await connection.execute(
-                    text(
-                        "INSERT INTO shape_points (feed_version_id, shape_id, sequence, latitude, longitude) VALUES (:version, :shape, :sequence, :lat, :lon)"
-                    ),
-                    {
-                        "version": version_id,
-                        "shape": shape_id,
-                        "sequence": sequence,
-                        "lat": latitude,
-                        "lon": longitude,
-                    },
-                )
+        shape_points = [
+            {
+                "version": version_id,
+                "shape": shape_id,
+                "sequence": sequence,
+                "lat": latitude,
+                "lon": longitude,
+            }
+            for shape_id, points in schedule.shapes.items()
+            for sequence, latitude, longitude in points
+        ]
+        if shape_points:
+            await connection.execute(
+                text(
+                    "INSERT INTO shape_points (feed_version_id, shape_id, sequence, latitude, longitude) VALUES (:version, :shape, :sequence, :lat, :lon)"
+                ),
+                shape_points,
+            )
         for transfer in schedule.transfers:
             await connection.execute(
                 text(

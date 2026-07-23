@@ -36,7 +36,7 @@ def fixture() -> bytes:
             "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nweekday,1,1,1,1,1,0,0,20260701,20260731\n",
             "calendar_dates.txt": "service_id,date,exception_type\nweekday,20260725,1\nweekday,20260728,2\n",
             "trips.txt": "route_id,service_id,trip_id,trip_headsign,shape_id\nRed,weekday,t1,Alewife,s1\n",
-            "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nt1,23:59:00,23:59:00,A,1\nt1,24:05:00,24:05:00,B,2\n",
+            "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nt1,23:59:00,23:59:00,A,0\nt1,24:05:00,24:05:00,B,1\n",
             "shapes.txt": "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\ns1,42.1,-71.1,1\ns1,42.2,-71.2,2\n",
             "transfers.txt": "from_stop_id,to_stop_id,transfer_type,min_transfer_time\nA,B,2,120\n",
         }
