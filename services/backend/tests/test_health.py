@@ -45,6 +45,14 @@ async def test_cors_is_narrow_by_default(client: AsyncClient) -> None:
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
 
 
+async def test_live_health_has_versioned_poll_history_metadata(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/live/health")
+
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == "1.0.0"
+    assert response.json()["meta"]["recent_polls"] == []
+
+
 async def test_invalid_requests_use_a_safe_consistent_problem_shape(client: AsyncClient) -> None:
     response = await client.get(
         "/api/v1/routes", params={"limit": 0}, headers={"X-Request-ID": "test"}

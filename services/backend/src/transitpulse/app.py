@@ -45,7 +45,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        if app.state.schedule_engine:
+        if app.state.schedule_engine and getattr(app.state, "schedule", None) is None:
             app.state.schedule = await load_active_schedule(app.state.schedule_engine)
         logger.info("application_started", environment=application_settings.environment)
         yield
