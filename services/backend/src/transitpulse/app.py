@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from transitpulse.cache import RedisProbe, RedisStateStore
 from transitpulse.config import Settings, get_settings
@@ -21,6 +22,7 @@ from transitpulse.live_api import router as live_router
 from transitpulse.logging import configure_logging
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.api import router as schedule_router
+from transitpulse.schedule.repository import load_active_schedule
 
 logger = structlog.get_logger()
 
@@ -43,12 +45,16 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        if app.state.schedule_engine:
+            app.state.schedule = await load_active_schedule(app.state.schedule_engine)
         logger.info("application_started", environment=application_settings.environment)
         yield
         for probe in app.state.probes:
             await probe.close()
         if app.state.redis_state_store:
             await app.state.redis_state_store.close()
+        if app.state.schedule_engine:
+            await app.state.schedule_engine.dispose()
         logger.info("application_stopped")
 
     app = FastAPI(
@@ -61,6 +67,11 @@ def create_app(
     app.state.current_state = CurrentState()
     app.state.pollers = {}
     app.state.event_broker = EventBroker()
+    app.state.schedule_engine = (
+        create_async_engine(application_settings.database_url)
+        if application_settings.database_url
+        else None
+    )
     app.state.redis_state_store = (
         RedisStateStore(
             Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
