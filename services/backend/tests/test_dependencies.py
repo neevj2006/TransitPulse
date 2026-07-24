@@ -38,6 +38,14 @@ async def test_static_feed_version_activation_persists_provenance() -> None:
     if not database_url:
         pytest.skip("PostgreSQL URL is not configured")
     engine = create_async_engine(database_url)
+    async with engine.connect() as connection:
+        previous = await connection.execute(
+            text(
+                "SELECT feed_version_id FROM static_feed_versions "
+                "WHERE import_status = 'ACTIVE' LIMIT 1"
+            )
+        )
+        previous_version_id = previous.scalar_one_or_none()
     schedule = Schedule(version="integration", checksum=uuid4().hex)
     version_id = await persist_and_activate(
         engine,
@@ -60,4 +68,12 @@ async def test_static_feed_version_activation_persists_provenance() -> None:
                 text("DELETE FROM static_feed_versions WHERE feed_version_id = :id"),
                 {"id": version_id},
             )
+            if previous_version_id:
+                await connection.execute(
+                    text(
+                        "UPDATE static_feed_versions SET import_status = 'ACTIVE' "
+                        "WHERE feed_version_id = :id"
+                    ),
+                    {"id": previous_version_id},
+                )
         await engine.dispose()

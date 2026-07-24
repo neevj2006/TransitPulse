@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text
 
 from transitpulse.cache import RedisStateStore
 from transitpulse.events import EventBroker
@@ -22,14 +23,9 @@ async def health(request: Request) -> dict[str, object]:
     source_ids = ("mbta-vehicles", "mbta-trip-updates", "mbta-alerts")
     if cache:
         values = [await cache.source_health(source_id) for source_id in source_ids]
-        return {
-            "schema_version": "1.0.0",
-            "data": [value for value in values if value],
-            "meta": {"request_id": str(uuid4()), "generated_at": now},
-        }
-    return {
-        "schema_version": "1.0.0",
-        "data": [
+        data = [value for value in values if value]
+    else:
+        data = [
             {
                 "source_id": source_id,
                 "state": poller.health.state(now),
@@ -37,8 +33,27 @@ async def health(request: Request) -> dict[str, object]:
                 "consecutive_failures": poller.health.failures,
             }
             for source_id, poller in pollers.items()
-        ],
-        "meta": {"request_id": str(uuid4()), "generated_at": now},
+        ]
+    history: list[dict[str, object]] = []
+    engine = getattr(request.app.state, "schedule_engine", None)
+    if engine:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text(
+                    "SELECT source_id, completed_at, outcome, status_code, bytes_received, "
+                    "error_code "
+                    "FROM feed_polls ORDER BY completed_at DESC LIMIT 30"
+                )
+            )
+            history = [dict(row) for row in result.mappings()]
+    return {
+        "schema_version": "1.0.0",
+        "data": data,
+        "meta": {
+            "request_id": str(uuid4()),
+            "generated_at": now,
+            "recent_polls": history,
+        },
     }
 
 
