@@ -2,7 +2,7 @@
 """Durable, rebuildable records for selected realtime observations."""
 
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -70,19 +70,50 @@ class RealtimeHistoryStore:
                 }
             )
         async with self.engine.begin() as connection:
+            month_start = retrieved_at.astimezone(UTC).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            partition = f"vehicle_observations_{month_start:%Y_%m}"
+            await connection.execute(
+                text(
+                    f"CREATE TABLE IF NOT EXISTS {partition} PARTITION OF vehicle_observations "
+                    f"FOR VALUES FROM ('{month_start.isoformat()}') TO ('{month_end.isoformat()}')"
+                )
+            )
+            accepted: list[dict[str, object]] = []
+            for row in rows:
+                inserted = await connection.execute(
+                    text(
+                        "INSERT INTO vehicle_observation_dedup (checksum, recorded_at) "
+                        "VALUES (:checksum, :retrieved_at) ON CONFLICT DO NOTHING RETURNING checksum"
+                    ),
+                    row,
+                )
+                if inserted.scalar_one_or_none():
+                    accepted.append(row)
+            if not accepted:
+                return
             await connection.execute(
                 text(
                     """INSERT INTO vehicle_observations (observation_id, route_id, vehicle_id, trip_id, observed_at, retrieved_at, latitude, longitude, checksum)
-                    VALUES (:observation_id, :route_id, :vehicle_id, :trip_id, :observed_at, :retrieved_at, :latitude, :longitude, :checksum)
-                    ON CONFLICT (checksum) DO NOTHING"""
+                    VALUES (:observation_id, :route_id, :vehicle_id, :trip_id, :observed_at, :retrieved_at, :latitude, :longitude, :checksum)"""
                 ),
-                rows,
+                accepted,
             )
 
     async def prune_observations(self, before: datetime) -> int:
         async with self.engine.begin() as connection:
             result = await connection.execute(
                 text("DELETE FROM vehicle_observations WHERE retrieved_at < :before"),
+                {"before": before},
+            )
+            await connection.execute(
+                text(
+                    "DELETE FROM vehicle_observation_dedup WHERE recorded_at < :before "
+                    "AND NOT EXISTS (SELECT 1 FROM vehicle_observations "
+                    "WHERE vehicle_observations.checksum = vehicle_observation_dedup.checksum)"
+                ),
                 {"before": before},
             )
         return result.rowcount or 0
