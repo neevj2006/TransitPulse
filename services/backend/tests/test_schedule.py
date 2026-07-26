@@ -147,7 +147,12 @@ async def test_schedule_routes_search_shape_and_arrivals(schedule_client: AsyncC
     assert routes.json()["meta"]["pagination"] == {"offset": 0, "limit": 50, "total": 1}
     search = await schedule_client.get("/api/v1/search", params={"q": "al"})
     assert search.json()["data"] == [
-        {"kind": "destination", "id": "Alewife", "label": "Alewife", "detail": "Scheduled destination"},
+        {
+            "kind": "destination",
+            "id": "Alewife",
+            "label": "Alewife",
+            "detail": "Scheduled destination",
+        },
         {"kind": "stop", "id": "A", "label": "Alpha", "detail": None},
     ]
     shape = await schedule_client.get("/api/v1/routes/Red/shape")
