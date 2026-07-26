@@ -3,12 +3,15 @@
 import asyncio
 import gzip
 import hashlib
+import json
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
+
+PARSER_VERSION = "gtfs-realtime-v1"
 
 
 @dataclass(frozen=True)
@@ -52,14 +55,35 @@ class RawSnapshotStore:
     def __init__(self, root: Path) -> None:
         self.root = root
 
-    def save(self, source_id: str, payload: bytes, retrieved_at: datetime) -> str:
+    def save(
+        self,
+        source_id: str,
+        payload: bytes,
+        retrieved_at: datetime,
+        source_url: str = "",
+        parser_version: str = PARSER_VERSION,
+    ) -> str:
         checksum = hashlib.sha256(payload).hexdigest()
         folder = self.root / source_id / retrieved_at.strftime("%Y%m%d%H")
         destination = folder / f"{checksum}.pb.gz"
+        metadata = folder / f"{checksum}.json"
         if not destination.exists():
             folder.mkdir(parents=True, exist_ok=True)
             with gzip.open(destination, "wb") as target:
                 target.write(payload)
+            metadata.write_text(
+                json.dumps(
+                    {
+                        "source_id": source_id,
+                        "source_url": source_url,
+                        "retrieved_at": retrieved_at.isoformat(),
+                        "checksum": checksum,
+                        "parser_version": parser_version,
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
         return checksum
 
     def prune(self, before: datetime) -> int:
@@ -68,6 +92,7 @@ class RawSnapshotStore:
         for path in paths:
             if datetime.fromtimestamp(path.stat().st_mtime, UTC) < before:
                 path.unlink()
+                path.with_suffix("").with_suffix(".json").unlink(missing_ok=True)
                 removed += 1
         return removed
 
@@ -141,7 +166,9 @@ class FeedPoller:
                     if str(error) == "PAYLOAD_TOO_LARGE"
                     else "SOURCE_HTTP_ERROR",
                 ), None
-            checksum = self.raw_store.save(self.config.source_id, payload, datetime.now(UTC))
+            checksum = self.raw_store.save(
+                self.config.source_id, payload, datetime.now(UTC), self.config.url
+            )
             self.health.failures, self.health.last_success_at, self.health.circuit_open_until = (
                 0,
                 datetime.now(UTC),

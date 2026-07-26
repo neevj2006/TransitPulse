@@ -1,4 +1,5 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportAttributeAccessIssue=false
+import json
 import os
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -122,6 +123,9 @@ async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path
     assert result.outcome == "SUCCESS"
     assert payload == b"payload"
     assert list(tmp_path.rglob("*.pb.gz"))  # noqa: ASYNC240
+    metadata = json.loads(next(tmp_path.rglob("*.json")).read_text(encoding="utf-8"))  # noqa: ASYNC240
+    assert metadata["parser_version"] == "gtfs-realtime-v1"
+    assert metadata["checksum"] == result.checksum
     assert "TransitPulse" in seen["user-agent"]
 
 
