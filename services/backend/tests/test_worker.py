@@ -4,8 +4,17 @@ from pathlib import Path
 import pytest
 
 from transitpulse.events import EventBroker
+from transitpulse.history import expired_partition_names
 from transitpulse.realtime import CurrentState, Vehicle
 from transitpulse.worker import RealtimeProjector, build_pollers
+
+
+def test_expired_partition_names_only_select_completed_months() -> None:
+    before = datetime(2026, 7, 15, tzinfo=UTC)
+    assert expired_partition_names(
+        ["vehicle_observations_2026_06", "vehicle_observations_2026_07", "not-a-partition"],
+        before,
+    ) == ["vehicle_observations_2026_06"]
 
 
 def test_worker_configures_independent_mbta_sources(tmp_path: Path) -> None:

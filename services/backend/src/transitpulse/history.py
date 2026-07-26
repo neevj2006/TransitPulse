@@ -2,6 +2,7 @@
 """Durable, rebuildable records for selected realtime observations."""
 
 import hashlib
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -12,6 +13,22 @@ from transitpulse.polling import PollResult
 from transitpulse.realtime import Vehicle
 
 DETAILED_ROUTES = frozenset({"Red", "Orange", "Green-B"})
+
+
+def expired_partition_names(names: list[str], before: datetime) -> list[str]:
+    """Return generated monthly partition names wholly before the retention boundary."""
+    cutoff = before.astimezone(UTC)
+    expired: list[str] = []
+    for name in names:
+        match = re.fullmatch(r"vehicle_observations_(\d{4})_(\d{2})", name)
+        if not match:
+            continue
+        year, month = map(int, match.groups())
+        month_start = datetime(year, month, 1, tzinfo=UTC)
+        month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        if month_end <= cutoff:
+            expired.append(name)
+    return expired
 
 
 class RealtimeHistoryStore:
@@ -104,6 +121,18 @@ class RealtimeHistoryStore:
 
     async def prune_observations(self, before: datetime) -> int:
         async with self.engine.begin() as connection:
+            partitions = await connection.execute(
+                text(
+                    "SELECT child.relname FROM pg_inherits "
+                    "JOIN pg_class parent ON pg_inherits.inhparent = parent.oid "
+                    "JOIN pg_class child ON pg_inherits.inhrelid = child.oid "
+                    "WHERE parent.relname = 'vehicle_observations'"
+                )
+            )
+            for partition in expired_partition_names(
+                [str(row.relname) for row in partitions], before
+            ):
+                await connection.execute(text(f"DROP TABLE {partition}"))
             result = await connection.execute(
                 text("DELETE FROM vehicle_observations WHERE retrieved_at < :before"),
                 {"before": before},
