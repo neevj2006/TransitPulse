@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { TransitMap } from "@/components/transit-map";
 import { StatePanel } from "@/components/trust";
+import { VehicleList } from "@/components/vehicle-list";
 
 export default function MapPage() {
   return (
@@ -15,9 +16,10 @@ export default function MapPage() {
           </p>
         </header>
         <TransitMap routeName="MBTA network" />
-        <StatePanel kind="empty" title="No live vehicles to show">
-          Vehicle locations will appear when a fresh agency feed is available.
-          Scheduled route information remains available.
+        <VehicleList vehicles={[]} />
+        <StatePanel kind="stale" title="Last-known locations expire">
+          Stale vehicles are never presented as live and are removed after the
+          configured TTL.
         </StatePanel>
       </div>
     </AppShell>
