@@ -37,6 +37,7 @@ class TripUpdate:
     timestamp: datetime | None
     relationship: str
     predictions: tuple[StopPrediction, ...] = ()
+    retrieved_at: datetime | None = None
 
 
 @dataclass(frozen=True)

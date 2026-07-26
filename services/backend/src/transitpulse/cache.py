@@ -97,6 +97,7 @@ class RedisStateStore:
                 "trip_id": item.trip_id,
                 "route_id": item.route_id,
                 "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "retrieved_at": item.retrieved_at.isoformat() if item.retrieved_at else None,
                 "predictions": [
                     {
                         "stop_id": prediction.stop_id,
