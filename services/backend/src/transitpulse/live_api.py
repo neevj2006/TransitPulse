@@ -212,6 +212,7 @@ async def trip_progress(request: Request, trip_id: str) -> dict[str, object]:
             "route_id": item.route_id,
             "vehicle_id": item.vehicle_id,
             "source_timestamp": item.timestamp,
+            "retrieved_at": item.retrieved_at,
             "relationship": item.relationship,
             "predictions": item.predictions,
         }
@@ -248,6 +249,7 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
                 else prediction.departure_time
             )
             timestamp = item.get("timestamp") if isinstance(item, dict) else item.timestamp
+            retrieved_at = item.get("retrieved_at") if isinstance(item, dict) else item.retrieved_at
             predicted_time = arrival_time or departure_time
             age = (
                 int((now - datetime.fromisoformat(timestamp)).total_seconds())
@@ -270,10 +272,12 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
                         else prediction.relationship,
                     },
                     "source_timestamp": timestamp,
+                    "retrieved_at": retrieved_at,
                     "freshness": {
                         "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
                         "age_seconds": age,
                     },
+                    "confidence": "HIGH" if age is not None and age <= 90 else "LOW",
                     "scheduled_fallback": None,
                     "sort_timestamp": predicted_time or now,
                 }

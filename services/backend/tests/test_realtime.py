@@ -233,6 +233,7 @@ async def test_live_arrivals_are_scoped_to_the_requested_stop() -> None:
         response = await client.get("/api/v1/live/stops/target/arrivals")
     assert response.status_code == 200
     assert response.json()["data"][0]["stop_id"] == "target"
+    assert response.json()["data"][0]["confidence"] == "HIGH"
 
 
 async def test_live_arrivals_explicitly_fall_back_to_schedule() -> None:

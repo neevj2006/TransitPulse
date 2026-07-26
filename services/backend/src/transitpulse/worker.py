@@ -65,7 +65,10 @@ class RealtimeProjector:
             if self.history:
                 await self.history.record_vehicles(changed, observed_at)
         elif source_id.endswith("trip-updates"):
-            updates = cast(list[TripUpdate], values)
+            updates = [
+                replace(item, retrieved_at=retrieved_at or datetime.now(UTC))
+                for item in cast(list[TripUpdate], values)
+            ]
             self.state.update_trip_updates(updates)
             if self.cache:
                 await self.cache.put_trip_updates(updates)
