@@ -74,10 +74,7 @@ export function AppShell({
           </nav>
           <div className="flex items-center gap-2">
             <ThemeSelect />
-            <span
-              className="text-muted grid size-11 place-items-center md:hidden"
-              aria-label="Navigation available below"
-            >
+            <span className="text-muted grid size-11 place-items-center md:hidden">
               <Menu aria-hidden="true" className="size-5" />
             </span>
           </div>
