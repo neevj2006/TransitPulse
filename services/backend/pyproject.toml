@@ -14,6 +14,7 @@ dependencies = [
     "redis>=6,<7",
     "sqlalchemy[asyncio]>=2.0,<3",
     "structlog>=25,<26",
+    "tzdata>=2025.2,<2027",
     "uvicorn[standard]>=0.35,<1",
 ]
 

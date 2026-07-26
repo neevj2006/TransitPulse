@@ -2,6 +2,7 @@
 import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -265,7 +266,8 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
     if not values:
         schedule: Schedule | None = getattr(request.app.state, "schedule", None)
         if schedule:
-            service_date = now.date()
+            agency = next(iter(schedule.agencies.values()), None)
+            service_date = now.astimezone(ZoneInfo(agency.timezone if agency else "UTC")).date()
             active = schedule.active_service_ids(service_date)
             for stop_time in schedule.stop_times:
                 trip = schedule.trips[stop_time.trip_id]
