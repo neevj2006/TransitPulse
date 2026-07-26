@@ -16,6 +16,7 @@ class Vehicle:
     latitude: float
     longitude: float
     source_timestamp: datetime | None
+    retrieved_at: datetime | None = None
 
 
 @dataclass(frozen=True)

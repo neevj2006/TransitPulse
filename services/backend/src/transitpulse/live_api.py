@@ -176,10 +176,12 @@ async def vehicles(
                 "latitude": vehicle.latitude,
                 "longitude": vehicle.longitude,
                 "source_timestamp": vehicle.source_timestamp,
+                "retrieved_at": vehicle.retrieved_at,
                 "freshness": {
                     "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
                     "age_seconds": age,
                 },
+                "confidence": "HIGH" if age is not None and age <= 90 else "LOW",
             }
         )
     return {
