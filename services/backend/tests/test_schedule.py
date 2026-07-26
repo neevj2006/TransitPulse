@@ -115,6 +115,7 @@ async def test_schedule_routes_search_shape_and_arrivals(schedule_client: AsyncC
     routes = await schedule_client.get("/api/v1/routes", params={"q": "red"})
     assert routes.status_code == 200
     assert routes.json()["data"][0]["route_id"] == "Red"
+    assert routes.json()["meta"]["pagination"] == {"offset": 0, "limit": 50, "total": 1}
     shape = await schedule_client.get("/api/v1/routes/Red/shape")
     assert shape.json()["data"]["features"][0]["geometry"]["type"] == "LineString"
     arrivals = await schedule_client.get(

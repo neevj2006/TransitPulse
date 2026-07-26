@@ -27,10 +27,15 @@ def _schedule(request: Request) -> Schedule:
     return schedule
 
 
-def _result(data: object, schedule: Schedule) -> Envelope:
+def _result(data: object, schedule: Schedule, **meta: object) -> Envelope:
     return Envelope(
         data=data,
-        meta={"request_id": str(uuid4()), "agency_id": "mbta", "feed_version_id": schedule.version},
+        meta={
+            "request_id": str(uuid4()),
+            "agency_id": "mbta",
+            "feed_version_id": schedule.version,
+            **meta,
+        },
     )
 
 
@@ -54,7 +59,10 @@ def _distance_metres(latitude: float, longitude: float, stop_lat: float, stop_lo
 
 @router.get("/routes", response_model=Envelope)
 async def routes(
-    request: Request, q: str | None = None, limit: int = Query(50, ge=1, le=100)
+    request: Request,
+    q: str | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> Envelope:
     schedule = _schedule(request)
     needle = q.casefold() if q else ""
@@ -65,7 +73,11 @@ async def routes(
         in " ".join(filter(None, (route.route_id, route.short_name, route.long_name))).casefold()
     ]
     matches.sort(key=lambda route: (route.short_name or route.route_id, route.route_id))
-    return _result([route.__dict__ for route in matches[:limit]], schedule)
+    return _result(
+        [route.__dict__ for route in matches[offset : offset + limit]],
+        schedule,
+        pagination={"offset": offset, "limit": limit, "total": len(matches)},
+    )
 
 
 @router.get("/routes/{route_id}", response_model=Envelope)
@@ -87,6 +99,7 @@ async def stops(
     latitude: float | None = None,
     longitude: float | None = None,
     limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> Envelope:
     schedule = _schedule(request)
     needle = q.casefold() if q else ""
@@ -104,7 +117,11 @@ async def stops(
         )
     else:
         items.sort(key=lambda stop: (stop.name, stop.stop_id))
-    return _result([stop.__dict__ for stop in items[:limit]], schedule)
+    return _result(
+        [stop.__dict__ for stop in items[offset : offset + limit]],
+        schedule,
+        pagination={"offset": offset, "limit": limit, "total": len(items)},
+    )
 
 
 @router.get("/stops/nearby", response_model=Envelope)
