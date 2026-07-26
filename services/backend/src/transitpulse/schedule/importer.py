@@ -137,6 +137,9 @@ def import_archive(payload: bytes) -> Schedule:
         feed_info = _rows(zf, "feed_info.txt")
         version = feed_info[0].get("feed_version") if feed_info else None
         schedule = Schedule(version=version or checksum[:12], checksum=checksum)
+        for optional_file in ("calendar.txt", "calendar_dates.txt", "shapes.txt", "transfers.txt"):
+            if optional_file not in names:
+                schedule.warnings.append(f"OPTIONAL_FILE_MISSING:{optional_file}")
         for row in _rows(zf, "agency.txt"):
             agency_id = row.get("agency_id") or "default"
             name, timezone = row.get("agency_name", ""), row.get("agency_timezone", "")

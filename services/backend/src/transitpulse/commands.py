@@ -87,9 +87,10 @@ async def import_static_feed() -> str:
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
             archive = await download_archive(settings.static_gtfs_url, client)
+        imported = import_archive(archive.payload)
         version_id = await persist_and_activate(
             engine,
-            import_archive(archive.payload),
+            imported,
             source_url=archive.source_url,
             retrieved_at=datetime.fromisoformat(archive.retrieved_at),
         )
@@ -98,6 +99,8 @@ async def import_static_feed() -> str:
             feed_version_id=version_id,
             checksum=archive.checksum,
             source_url=archive.source_url,
+            import_statistics=imported.import_statistics(),
+            warnings=imported.warnings,
         )
         return version_id
     finally:

@@ -74,6 +74,19 @@ class Schedule:
     exceptions: dict[tuple[str, date], bool] = field(default_factory=lambda: {})
     shapes: dict[str, list[tuple[int, float, float]]] = field(default_factory=lambda: {})
     transfers: list[Transfer] = field(default_factory=lambda: [])
+    warnings: list[str] = field(default_factory=lambda: [])
+
+    def import_statistics(self) -> dict[str, int]:
+        return {
+            "agencies": len(self.agencies),
+            "routes": len(self.routes),
+            "stops": len(self.stops),
+            "services": len(self.services),
+            "trips": len(self.trips),
+            "stop_times": len(self.stop_times),
+            "shape_points": sum(len(points) for points in self.shapes.values()),
+            "transfers": len(self.transfers),
+        }
 
     def active_service_ids(self, service_date: date) -> set[str]:
         active: set[str] = set()
