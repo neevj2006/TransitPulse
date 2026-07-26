@@ -51,6 +51,7 @@ async def test_live_health_has_versioned_poll_history_metadata(client: AsyncClie
     assert response.status_code == 200
     assert response.json()["schema_version"] == "1.0.0"
     assert response.json()["meta"]["recent_polls"] == []
+    assert response.json()["meta"]["diagnostics"] == []
 
 
 async def test_invalid_requests_use_a_safe_consistent_problem_shape(client: AsyncClient) -> None:
