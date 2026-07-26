@@ -1,4 +1,4 @@
-# pyright: reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportAttributeAccessIssue=false
+# pyright: reportMissingTypeStubs=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false, reportAttributeAccessIssue=false
 """Small, testable GTFS-Realtime normalization and current-state projection."""
 
 from dataclasses import dataclass
@@ -53,6 +53,22 @@ class RealtimeValidationError(ValueError):
 MAX_FUTURE_SOURCE_SKEW = timedelta(minutes=5)
 
 
+def _feed(payload: bytes) -> gtfs_realtime_pb2.FeedMessage:
+    feed = gtfs_realtime_pb2.FeedMessage()
+    try:
+        feed.ParseFromString(payload)
+    except Exception as error:
+        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    if feed.header.gtfs_realtime_version != "2.0":
+        raise RealtimeValidationError("FEED_HEADER_INVALID")
+    if feed.header.incrementality not in {
+        gtfs_realtime_pb2.FeedHeader.FULL_DATASET,
+        gtfs_realtime_pb2.FeedHeader.DIFFERENTIAL,
+    }:
+        raise RealtimeValidationError("FEED_INCREMENTALITY_INVALID")
+    return feed  # pyright: ignore[reportUnknownVariableType]
+
+
 def _source_timestamp(value: int) -> datetime | None:
     if not value:
         return None
@@ -61,11 +77,7 @@ def _source_timestamp(value: int) -> datetime | None:
 
 
 def parse_vehicle_positions(payload: bytes) -> list[Vehicle]:
-    feed = gtfs_realtime_pb2.FeedMessage()
-    try:
-        feed.ParseFromString(payload)
-    except Exception as error:
-        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    feed = _feed(payload)
     vehicles: list[Vehicle] = []
     for entity in feed.entity:
         if not entity.id or not entity.HasField("vehicle"):
@@ -94,11 +106,7 @@ def parse_vehicle_positions(payload: bytes) -> list[Vehicle]:
 
 
 def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
-    feed = gtfs_realtime_pb2.FeedMessage()
-    try:
-        feed.ParseFromString(payload)
-    except Exception as error:
-        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    feed = _feed(payload)
     results: list[TripUpdate] = []
     for entity in feed.entity:
         if (
@@ -143,11 +151,7 @@ def parse_trip_updates(payload: bytes) -> list[TripUpdate]:
 
 
 def parse_alerts(payload: bytes) -> list[Alert]:
-    feed = gtfs_realtime_pb2.FeedMessage()
-    try:
-        feed.ParseFromString(payload)
-    except Exception as error:
-        raise RealtimeValidationError("PROTOBUF_INVALID") from error
+    feed = _feed(payload)
     results: list[Alert] = []
     for entity in feed.entity:
         if not entity.id or not entity.HasField("alert"):

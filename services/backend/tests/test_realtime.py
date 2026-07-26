@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
+import pytest
 from google.transit import gtfs_realtime_pb2
 
 from transitpulse.app import create_app
@@ -14,6 +15,7 @@ from transitpulse.events import EventBroker
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
+    RealtimeValidationError,
     StopPrediction,
     TripUpdate,
     Vehicle,
@@ -46,6 +48,16 @@ def test_rejects_future_dated_realtime_entities() -> None:
     entity.vehicle.position.longitude = -71.0
     entity.vehicle.timestamp = int((datetime.now(UTC) + timedelta(minutes=6)).timestamp())
     assert parse_vehicle_positions(feed.SerializeToString()) == []
+
+
+def test_rejects_missing_or_unsupported_realtime_feed_headers() -> None:
+    unsupported = gtfs_realtime_pb2.FeedMessage()
+    unsupported.header.gtfs_realtime_version = "1.0"
+
+    with pytest.raises(RealtimeValidationError, match="FEED_HEADER_INVALID"):
+        parse_vehicle_positions(b"")
+    with pytest.raises(RealtimeValidationError, match="FEED_HEADER_INVALID"):
+        parse_vehicle_positions(unsupported.SerializeToString())
 
 
 def test_parses_trip_updates_and_alerts() -> None:
