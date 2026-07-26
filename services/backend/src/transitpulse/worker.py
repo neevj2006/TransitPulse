@@ -83,7 +83,10 @@ class RealtimeProjector:
                         item.route_id,
                     )
         else:
-            alerts = cast(list[Alert], values)
+            alerts = [
+                replace(item, retrieved_at=retrieved_at or datetime.now(UTC))
+                for item in cast(list[Alert], values)
+            ]
             self.state.update_alerts(alerts)
             if self.cache:
                 await self.cache.put_alerts(alerts)

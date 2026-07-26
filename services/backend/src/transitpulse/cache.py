@@ -142,6 +142,7 @@ class RedisStateStore:
                 "header": item.header,
                 "route_ids": item.route_ids,
                 "stop_ids": item.stop_ids,
+                "retrieved_at": item.retrieved_at.isoformat() if item.retrieved_at else None,
             }
             async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
                 pipe.set(

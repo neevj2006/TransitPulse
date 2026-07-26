@@ -46,6 +46,7 @@ class Alert:
     header: str | None
     route_ids: tuple[str, ...]
     stop_ids: tuple[str, ...]
+    retrieved_at: datetime | None = None
 
 
 class RealtimeValidationError(ValueError):
