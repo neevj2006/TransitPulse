@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 # pyright: reportUnknownVariableType=false, reportGeneralTypeIssues=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportOperatorIssue=false
 import asyncio
 from datetime import UTC, datetime
@@ -36,6 +37,7 @@ async def health(request: Request) -> dict[str, object]:
             for source_id, poller in pollers.items()
         ]
     history: list[dict[str, object]] = []
+    diagnostics: list[dict[str, object]] = []
     engine = getattr(request.app.state, "schedule_engine", None)
     if engine:
         async with engine.connect() as connection:
@@ -47,6 +49,17 @@ async def health(request: Request) -> dict[str, object]:
                 )
             )
             history = [dict(row) for row in result.mappings()]
+            summary = await connection.execute(
+                text(
+                    "SELECT source_id, count(*) AS poll_count, "
+                    "count(*) FILTER (WHERE outcome IN ('SUCCESS', 'NOT_MODIFIED')) AS success_count, "
+                    "max(completed_at) FILTER (WHERE outcome IN ('SUCCESS', 'NOT_MODIFIED')) AS last_success_at, "
+                    "round(avg(extract(epoch FROM completed_at - started_at))::numeric, 3) AS average_latency_seconds "
+                    "FROM feed_polls WHERE completed_at >= now() - interval '24 hours' "
+                    "GROUP BY source_id ORDER BY source_id"
+                )
+            )
+            diagnostics = [dict(row) for row in summary.mappings()]
     return {
         "schema_version": "1.0.0",
         "data": data,
@@ -54,6 +67,7 @@ async def health(request: Request) -> dict[str, object]:
             "request_id": str(uuid4()),
             "generated_at": now,
             "recent_polls": history,
+            "diagnostics": diagnostics,
         },
     }
 
