@@ -22,6 +22,8 @@ from transitpulse.realtime import (
     parse_trip_updates,
     parse_vehicle_positions,
 )
+from transitpulse.reconciliation import reconcile_trip_update, reconcile_vehicle
+from transitpulse.schedule.models import Schedule
 
 logger = structlog.get_logger()
 
@@ -35,8 +37,15 @@ class RealtimeProjector:
         broker: EventBroker,
         cache: RedisStateStore | None = None,
         history: RealtimeHistoryStore | None = None,
+        schedule: Schedule | None = None,
     ) -> None:
-        self.state, self.broker, self.cache, self.history = state, broker, cache, history
+        self.state, self.broker, self.cache, self.history, self.schedule = (
+            state,
+            broker,
+            cache,
+            history,
+            schedule,
+        )
 
     async def project(
         self,
@@ -48,6 +57,12 @@ class RealtimeProjector:
             observed_at = retrieved_at or datetime.now(UTC)
             vehicles = [
                 replace(item, retrieved_at=observed_at) for item in cast(list[Vehicle], values)
+            ]
+            vehicles = [
+                item
+                for item in vehicles
+                if self.schedule is None
+                or reconcile_vehicle(item, self.schedule).state != "UNRECONCILED"
             ]
             changed = self.state.update_vehicles(vehicles)
             for item in changed:
@@ -68,6 +83,12 @@ class RealtimeProjector:
             updates = [
                 replace(item, retrieved_at=retrieved_at or datetime.now(UTC))
                 for item in cast(list[TripUpdate], values)
+            ]
+            updates = [
+                item
+                for item in updates
+                if self.schedule is None
+                or reconcile_trip_update(item, self.schedule).state != "UNRECONCILED"
             ]
             self.state.update_trip_updates(updates)
             if self.cache:
@@ -195,10 +216,11 @@ async def run_worker(
     history: RealtimeHistoryStore | None = None,
     raw_retention_hours: int = 6,
     detailed_history_retention_days: int = 14,
+    schedule: Schedule | None = None,
 ) -> None:
     stop = asyncio.Event()
     pollers = build_pollers(raw_path, vehicle_url, trip_url, alert_url)
-    projector = RealtimeProjector(CurrentState(), EventBroker(), cache, history)
+    projector = RealtimeProjector(CurrentState(), EventBroker(), cache, history, schedule)
     try:
         await asyncio.gather(
             run_poller(pollers["mbta-vehicles"], parse_vehicle_positions, stop, projector),
