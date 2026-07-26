@@ -73,3 +73,24 @@ async def test_projector_quarantines_unreconciled_vehicles_when_static_is_availa
 
     assert state.vehicles == {}
     assert projector.diagnostics["mbta-vehicles"]["unreconciled"] == 1
+
+
+@pytest.mark.asyncio
+async def test_projector_detects_missing_entity_count_changes() -> None:
+    projector = RealtimeProjector(CurrentState(), EventBroker())
+    now = datetime.now(UTC)
+    await projector.project(
+        "mbta-vehicles",
+        [
+            Vehicle("one", "one", "Red", None, 42, -71, now),
+            Vehicle("two", "two", "Red", None, 42.1, -71.1, now),
+        ],
+        now,
+    )
+    await projector.project(
+        "mbta-vehicles",
+        [Vehicle("one", "one", "Red", None, 42, -71, now)],
+        now,
+    )
+
+    assert projector.diagnostics["mbta-vehicles"]["missing_entity_count_changes"] == 1

@@ -82,6 +82,7 @@ def create_app(
         else None
     )
     app.state.request_windows = {}
+    app.state.api_latencies_ms = []
     app.state.sse_connections = 0
     app.state.sse_lock = asyncio.Lock()
     app.add_middleware(
@@ -151,6 +152,12 @@ def create_app(
                 },
                 status_code=500,
             )
+        if request.url.path.startswith("/api/"):
+            elapsed_ms = (monotonic() - now) * 1000
+            request.app.state.api_latencies_ms = [
+                *request.app.state.api_latencies_ms[-999:],
+                elapsed_ms,
+            ]
         response.headers["X-Request-ID"] = request_id
         response.headers["Cache-Control"] = (
             "no-store" if request.url.path.startswith("/api/v1/live") else "public, max-age=60"

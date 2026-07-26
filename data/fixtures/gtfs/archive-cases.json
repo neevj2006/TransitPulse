@@ -1,0 +1,17 @@
+{
+  "safe": {
+    "agency.txt": "agency_id,agency_name,agency_url,agency_timezone\nMBTA,MBTA,https://mbta.com,America/New_York\n",
+    "routes.txt": "route_id,route_short_name,route_long_name,route_type,route_color\nRed,Red,Red Line,1,DA291C\n",
+    "stops.txt": "stop_id,stop_name,stop_lat,stop_lon\nplace-test,Recorded Stop,42.35,-71.06\n",
+    "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nrecorded,1,1,1,1,1,1,1,20260101,20261231\n",
+    "trips.txt": "route_id,service_id,trip_id\nRed,recorded,trip-recorded\n",
+    "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\ntrip-recorded,24:05:00,24:05:00,place-test,1\n"
+  },
+  "missing_required": {
+    "agency.txt": "agency_id,agency_name,agency_url,agency_timezone\nMBTA,MBTA,https://mbta.com,America/New_York\n"
+  },
+  "malicious_path": {
+    "../routes.txt": "route_id,route_type\nunsafe,3\n"
+  },
+  "malformed_base64": "bm90LWEtZ3Rmcy16aXAtYXJjaGl2ZQ=="
+}

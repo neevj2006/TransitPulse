@@ -34,6 +34,7 @@ class Trip:
     service_id: str
     shape_id: str | None
     headsign: str | None
+    direction_id: int | None = None
 
 
 @dataclass(frozen=True)

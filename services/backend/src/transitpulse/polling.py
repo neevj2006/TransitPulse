@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import json
 import random
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,38 @@ from pathlib import Path
 import httpx
 
 PARSER_VERSION = "gtfs-realtime-v1"
+
+
+def promote_fixture(
+    fixture_root: Path,
+    fixture_name: str,
+    payload: bytes,
+    source_url: str,
+    parser_version: str = PARSER_VERSION,
+) -> tuple[Path, Path]:
+    """Promote a selected public payload into a deterministic offline fixture."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", fixture_name):
+        raise ValueError("FIXTURE_NAME_INVALID")
+    checksum = hashlib.sha256(payload).hexdigest()
+    fixture_root.mkdir(parents=True, exist_ok=True)
+    payload_path = fixture_root / f"{fixture_name}.pb"
+    metadata_path = fixture_root / f"{fixture_name}.json"
+    payload_path.write_bytes(payload)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "fixture_name": fixture_name,
+                "source_url": source_url,
+                "checksum": checksum,
+                "parser_version": parser_version,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return payload_path, metadata_path
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,9 @@
 """Durable, rebuildable records for selected realtime observations."""
 
 import hashlib
+import json
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -10,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from transitpulse.polling import PollResult
-from transitpulse.realtime import Vehicle
+from transitpulse.realtime import TripUpdate, Vehicle
 
 DETAILED_ROUTES = frozenset({"Red", "Orange", "Green-B"})
 
@@ -57,6 +59,155 @@ class RealtimeHistoryStore:
                     "error_code": result.error_code,
                 },
             )
+            if result.outcome not in {"SUCCESS", "NOT_MODIFIED"}:
+                await connection.execute(
+                    text(
+                        """INSERT INTO realtime_quality_events
+                        (event_id, source_id, entity_type, observed_at, signal, detail)
+                        VALUES (:id, :source, 'feed', :observed, 'FEED_GAP',
+                        CAST(:detail AS jsonb))"""
+                    ),
+                    {
+                        "id": uuid4(),
+                        "source": result.source_id,
+                        "observed": result.completed_at,
+                        "detail": json.dumps(
+                            {"outcome": result.outcome, "error_code": result.error_code}
+                        ),
+                    },
+                )
+
+    async def record_quality(
+        self,
+        source_id: str,
+        entity_type: str,
+        entity_id: str | None,
+        route_id: str | None,
+        signal: str,
+        observed_at: datetime,
+        reconciliation_state: str | None = None,
+        confidence: str | None = None,
+        reason: str | None = None,
+        detail: Mapping[str, object] | None = None,
+    ) -> None:
+        if entity_type != "feed" and route_id not in DETAILED_ROUTES:
+            return
+        async with self.engine.begin() as connection:
+            await connection.execute(
+                text(
+                    """INSERT INTO realtime_quality_events
+                    (event_id, source_id, entity_type, entity_id, route_id, observed_at,
+                    signal, reconciliation_state, confidence, reason, detail)
+                    VALUES (:id, :source, :entity_type, :entity_id, :route, :observed,
+                    :signal, :state, :confidence, :reason, CAST(:detail AS jsonb))"""
+                ),
+                {
+                    "id": uuid4(),
+                    "source": source_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "route": route_id,
+                    "observed": observed_at,
+                    "signal": signal,
+                    "state": reconciliation_state,
+                    "confidence": confidence,
+                    "reason": reason,
+                    "detail": json.dumps(detail or {}),
+                },
+            )
+
+    async def record_trip_updates(self, values: list[TripUpdate], retrieved_at: datetime) -> None:
+        rows: list[dict[str, object]] = []
+        for item in values:
+            if item.route_id not in DETAILED_ROUTES:
+                continue
+            predictions = item.predictions or (None,)
+            for prediction in predictions:
+                fingerprint = "|".join(
+                    [
+                        item.trip_id,
+                        item.relationship,
+                        prediction.stop_id if prediction else "",
+                        prediction.relationship if prediction else "",
+                        str(prediction.arrival_time if prediction else None),
+                        str(prediction.departure_time if prediction else None),
+                        str(prediction.arrival_delay_seconds if prediction else None),
+                        str(prediction.departure_delay_seconds if prediction else None),
+                    ]
+                )
+                rows.append(
+                    {
+                        "id": uuid4(),
+                        "route": item.route_id,
+                        "trip": item.trip_id,
+                        "observed": item.timestamp,
+                        "retrieved": retrieved_at,
+                        "relationship": item.relationship,
+                        "stop": prediction.stop_id if prediction else None,
+                        "stop_relationship": prediction.relationship if prediction else None,
+                        "arrival": prediction.arrival_time if prediction else None,
+                        "departure": prediction.departure_time if prediction else None,
+                        "arrival_delay": (prediction.arrival_delay_seconds if prediction else None),
+                        "departure_delay": (
+                            prediction.departure_delay_seconds if prediction else None
+                        ),
+                        "checksum": hashlib.sha256(fingerprint.encode()).hexdigest(),
+                    }
+                )
+        if not rows:
+            return
+        async with self.engine.begin() as connection:
+            for row in rows:
+                await connection.execute(
+                    text(
+                        """INSERT INTO trip_update_observations
+                        (observation_id, route_id, trip_id, observed_at, retrieved_at,
+                        trip_relationship, stop_id, stop_relationship, arrival_time,
+                        departure_time, arrival_delay_seconds, departure_delay_seconds,
+                        checksum)
+                        VALUES (:id, :route, :trip, :observed, :retrieved,
+                        :relationship, :stop, :stop_relationship, :arrival, :departure,
+                        :arrival_delay, :departure_delay, :checksum)
+                        ON CONFLICT (checksum) DO NOTHING"""
+                    ),
+                    row,
+                )
+
+    async def measure_usage(self) -> dict[str, int | float | None]:
+        async with self.engine.connect() as connection:
+            result = (
+                (
+                    await connection.execute(
+                        text(
+                            """WITH observations AS (
+                        SELECT retrieved_at FROM vehicle_observations
+                        UNION ALL
+                        SELECT retrieved_at FROM trip_update_observations)
+                        SELECT count(*) AS observations,
+                        min(retrieved_at) AS first_at, max(retrieved_at) AS last_at,
+                        pg_total_relation_size('vehicle_observations') +
+                        pg_total_relation_size('trip_update_observations') +
+                        pg_total_relation_size('realtime_quality_events') AS bytes
+                        FROM observations"""
+                        )
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        elapsed_days = (
+            max((result["last_at"] - result["first_at"]).total_seconds() / 86400, 1)
+            if result["first_at"] and result["last_at"]
+            else None
+        )
+        return {
+            "observations": int(result["observations"]),
+            "storage_bytes": int(result["bytes"]),
+            "observed_days": elapsed_days,
+            "estimated_daily_bytes": (
+                int(result["bytes"] / elapsed_days) if elapsed_days else None
+            ),
+        }
 
     async def record_vehicles(self, values: list[Vehicle], retrieved_at: datetime) -> None:
         selected = [item for item in values if item.route_id in DETAILED_ROUTES]
@@ -133,8 +284,16 @@ class RealtimeHistoryStore:
                 [str(row.relname) for row in partitions], before
             ):
                 await connection.execute(text(f"DROP TABLE {partition}"))
-            result = await connection.execute(
+            vehicle_result = await connection.execute(
                 text("DELETE FROM vehicle_observations WHERE retrieved_at < :before"),
+                {"before": before},
+            )
+            trip_result = await connection.execute(
+                text("DELETE FROM trip_update_observations WHERE retrieved_at < :before"),
+                {"before": before},
+            )
+            quality_result = await connection.execute(
+                text("DELETE FROM realtime_quality_events WHERE observed_at < :before"),
                 {"before": before},
             )
             await connection.execute(
@@ -145,4 +304,4 @@ class RealtimeHistoryStore:
                 ),
                 {"before": before},
             )
-        return result.rowcount or 0
+        return sum(result.rowcount or 0 for result in (vehicle_result, trip_result, quality_result))

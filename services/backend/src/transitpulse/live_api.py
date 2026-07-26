@@ -19,6 +19,22 @@ from transitpulse.schedule.models import Schedule
 router = APIRouter(prefix="/api/v1/live", tags=["realtime"])
 
 
+def latency_summary(values: list[float]) -> dict[str, float | int | None]:
+    if not values:
+        return {"sample_count": 0, "p50_ms": None, "p95_ms": None}
+    ordered = sorted(values)
+
+    def percentile(fraction: float) -> float:
+        index = min(len(ordered) - 1, round((len(ordered) - 1) * fraction))
+        return round(ordered[index], 3)
+
+    return {
+        "sample_count": len(ordered),
+        "p50_ms": percentile(0.5),
+        "p95_ms": percentile(0.95),
+    }
+
+
 def service_date_for(schedule: Schedule, moment: datetime) -> str:
     agency = next(iter(schedule.agencies.values()), None)
     return moment.astimezone(ZoneInfo(agency.timezone if agency else "UTC")).date().isoformat()
@@ -81,6 +97,7 @@ async def health(request: Request) -> dict[str, object]:
             if str(key).startswith("reconciliation_") or str(key).endswith("_unreconciled")
         }
         item["diagnostic_rates"] = diagnostic_rates(entity_diagnostics)
+        item["diagnostic_scope"] = "TRANSITPULSE_INFERENCE"
     return {
         "schema_version": "1.0.0",
         "data": data,
@@ -90,6 +107,7 @@ async def health(request: Request) -> dict[str, object]:
             "recent_polls": history,
             "diagnostics": diagnostics,
             "cache_telemetry": cache_telemetry,
+            "api_latency": latency_summary(request.app.state.api_latencies_ms),
         },
     }
 
@@ -226,6 +244,7 @@ async def trip_progress(request: Request, trip_id: str) -> dict[str, object]:
                 "message": "Live trip data is unavailable.",
             },
         )
+    data: dict[str, object]
     if isinstance(item, dict):
         data = item
     else:
@@ -238,10 +257,27 @@ async def trip_progress(request: Request, trip_id: str) -> dict[str, object]:
             "relationship": item.relationship,
             "predictions": item.predictions,
         }
+    source_timestamp = data.get("source_timestamp")
+    parsed_timestamp = (
+        datetime.fromisoformat(source_timestamp)
+        if isinstance(source_timestamp, str)
+        else source_timestamp
+    )
+    now = datetime.now(UTC)
+    age = (
+        int((now - parsed_timestamp).total_seconds())
+        if isinstance(parsed_timestamp, datetime)
+        else None
+    )
+    data["freshness"] = {
+        "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
+        "age_seconds": age,
+    }
+    data["confidence"] = "HIGH" if age is not None and age <= 90 else "LOW"
     return {
         "schema_version": "1.0.0",
         "data": data,
-        "meta": {"request_id": str(uuid4()), "generated_at": datetime.now(UTC)},
+        "meta": {"request_id": str(uuid4()), "generated_at": now},
     }
 
 
@@ -356,26 +392,44 @@ async def alerts(
             and (not stop_id or stop_id in item.stop_ids)
         ]
     )
+    data: list[dict[str, object]] = []
+    now = datetime.now(UTC)
+    for item in values[:100]:
+        value = (
+            item
+            if isinstance(item, dict)
+            else {
+                "alert_id": item.entity_id,
+                "header": item.header,
+                "route_ids": item.route_ids,
+                "stop_ids": item.stop_ids,
+                "retrieved_at": item.retrieved_at,
+                "source_timestamp": item.source_timestamp,
+            }
+        )
+        source_timestamp = value.get("source_timestamp")
+        parsed_timestamp = (
+            datetime.fromisoformat(source_timestamp)
+            if isinstance(source_timestamp, str)
+            else source_timestamp
+        )
+        age = (
+            int((now - parsed_timestamp).total_seconds())
+            if isinstance(parsed_timestamp, datetime)
+            else None
+        )
+        data.append(
+            {
+                **value,
+                "freshness": {
+                    "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
+                    "age_seconds": age,
+                },
+                "confidence": "MEDIUM" if age is not None and age <= 90 else "LOW",
+            }
+        )
     return {
         "schema_version": "1.0.0",
-        "data": [
-            {
-                **(
-                    item
-                    if isinstance(item, dict)
-                    else {
-                        "alert_id": item.entity_id,
-                        "header": item.header,
-                        "route_ids": item.route_ids,
-                        "stop_ids": item.stop_ids,
-                        "retrieved_at": item.retrieved_at,
-                    }
-                ),
-                "source_timestamp": None,
-                "freshness": {"state": "HEALTHY", "age_seconds": 0},
-                "confidence": "MEDIUM",
-            }
-            for item in values[:100]
-        ],
+        "data": data,
         "meta": {"request_id": str(uuid4())},
     }

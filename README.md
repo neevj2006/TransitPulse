@@ -3,9 +3,9 @@
 TransitPulse is an open-source foundation for working with scheduled and
 realtime public-transit data.
 
-The repository is being built incrementally. Its current foundation includes a
-Next.js health interface, a FastAPI service, and local PostGIS and Valkey
-infrastructure.
+The implemented data foundation includes secure/versioned static GTFS imports,
+scheduled transit APIs, GTFS-Realtime polling, bounded current state, selected
+historical evidence, feed diagnostics, and Server-Sent Events.
 
 ## Repository layout
 
@@ -31,7 +31,8 @@ TransitPulse is available under the [MIT License](LICENSE).
 2. In `services/backend`, run `uv sync --frozen`.
 3. Follow the [local infrastructure setup](infra/README.md).
 4. Start the backend with `uv run transitpulse-api`.
-5. From the repository root, start the frontend with `pnpm --filter web dev`.
+5. Start realtime ingestion with `uv run transitpulse-worker`.
+6. From the repository root, start the frontend with `pnpm --filter web dev`.
 
 The frontend is available at `http://localhost:3000/health`; backend health is
 available at `http://127.0.0.1:8000/health/live`.
@@ -39,6 +40,11 @@ available at `http://127.0.0.1:8000/health/live`.
 Environment examples contain placeholders or non-secret public defaults only.
 Local `.env` files are ignored. Development, preview, and production
 environments must use separate values and credentials.
+
+Checked-in static and realtime fixtures under `data/fixtures` keep parser and API
+contract tests deterministic and offline. See
+[realtime data and trust behavior](docs/realtime-data.md) for freshness,
+reconciliation, retention, diagnostics, and streaming details.
 
 ## Deployment
 

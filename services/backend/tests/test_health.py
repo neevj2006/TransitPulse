@@ -19,7 +19,10 @@ class HealthyProbe:
 
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
-    app = create_app(Settings(environment="test"), probes=[HealthyProbe()])
+    app = create_app(
+        Settings(environment="test", database_url=None, redis_url=None),
+        probes=[HealthyProbe()],
+    )
     async with app.router.lifespan_context(app):
         async with AsyncClient(
             transport=ASGITransport(app=app),
@@ -81,6 +84,7 @@ async def test_live_health_exposes_safe_entity_and_quality_summaries() -> None:
     assert source["entity_counts"] == {"accepted": 8}
     assert source["rejection_counts"]["unreconciled"] == 2
     assert source["diagnostic_rates"]["parser_failure_rate"] == 0.1
+    assert source["diagnostic_scope"] == "TRANSITPULSE_INFERENCE"
     assert response.json()["meta"]["cache_telemetry"]["memory_bytes"] == 512
 
 

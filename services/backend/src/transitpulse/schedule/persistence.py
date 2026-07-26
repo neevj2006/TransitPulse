@@ -121,13 +121,14 @@ async def persist_and_activate(
                 "service": trip.service_id,
                 "shape": trip.shape_id,
                 "headsign": trip.headsign,
+                "direction": trip.direction_id,
             }
             for trip in schedule.trips.values()
         ]
         if trips:
             await insert_many(
                 connection,
-                "INSERT INTO trips (feed_version_id, trip_id, route_id, service_id, shape_id, headsign) VALUES (:version, :id, :route, :service, :shape, :headsign)",
+                "INSERT INTO trips (feed_version_id, trip_id, route_id, service_id, shape_id, headsign, direction_id) VALUES (:version, :id, :route, :service, :shape, :headsign, :direction)",
                 trips,
             )
         for (service_id, service_date), is_added in schedule.exceptions.items():
