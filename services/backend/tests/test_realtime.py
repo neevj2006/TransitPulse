@@ -10,7 +10,7 @@ from google.transit import gtfs_realtime_pb2
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
-from transitpulse.diagnostics import vehicle_quality
+from transitpulse.diagnostics import diagnostic_rates, vehicle_quality
 from transitpulse.events import EventBroker
 from transitpulse.live_api import service_date_for
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
@@ -24,8 +24,8 @@ from transitpulse.realtime import (
     parse_trip_updates,
     parse_vehicle_positions,
 )
-from transitpulse.reconciliation import reconcile_vehicle
-from transitpulse.schedule.models import Agency, Schedule, Service, Stop, StopTime, Trip
+from transitpulse.reconciliation import reconcile_trip_update, reconcile_vehicle
+from transitpulse.schedule.models import Agency, Route, Schedule, Service, Stop, StopTime, Trip
 
 
 def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
@@ -105,6 +105,40 @@ def test_unreconciled_vehicle_is_explicit() -> None:
     )
     assert result.state == "UNRECONCILED"
     assert result.reason == "ROUTE_UNRECONCILED"
+
+
+def test_reconciliation_records_partial_descriptor_mismatches() -> None:
+    schedule = Schedule(
+        "v",
+        "checksum",
+        routes={"Red": Route("Red", "Red", None, 1)},
+        stops={"known-stop": Stop("known-stop", "Known", 42, -71)},
+        trips={"trip": Trip("trip", "Red", "daily", None, None)},
+    )
+    update = TripUpdate(
+        "entity",
+        "trip",
+        "Orange",
+        None,
+        datetime.now(UTC),
+        "0",
+        (StopPrediction("missing-stop", None, None, None, "0"),),
+    )
+    result = reconcile_trip_update(update, schedule)
+    assert result.state == "PARTIAL"
+    assert result.reason == "STOP_UNRECONCILED"
+    assert result.confidence == "MEDIUM"
+
+
+def test_diagnostic_rates_make_realtime_quality_limits_explicit() -> None:
+    rates = diagnostic_rates(
+        {"accepted": 8, "unreconciled": 2, "parser_errors": 1, "duplicates": 3}
+    )
+    assert rates == {
+        "parser_failure_rate": 0.1,
+        "reconciliation_failure_rate": 0.2,
+        "duplicate_rate": 0.3,
+    }
 
 
 def test_vehicle_quality_flags_frozen_and_impossible_jumps() -> None:
