@@ -46,6 +46,12 @@ class RealtimeProjector:
             history,
             schedule,
         )
+        self.diagnostics: dict[str, dict[str, int]] = {}
+
+    def count_diagnostic(self, source_id: str, key: str, amount: int = 1) -> None:
+        self.diagnostics.setdefault(source_id, {})[key] = (
+            self.diagnostics.setdefault(source_id, {}).get(key, 0) + amount
+        )
 
     async def project(
         self,
@@ -58,12 +64,15 @@ class RealtimeProjector:
             vehicles = [
                 replace(item, retrieved_at=observed_at) for item in cast(list[Vehicle], values)
             ]
+            accepted = len(vehicles)
             vehicles = [
                 item
                 for item in vehicles
                 if self.schedule is None
                 or reconcile_vehicle(item, self.schedule).state != "UNRECONCILED"
             ]
+            self.count_diagnostic(source_id, "accepted", len(vehicles))
+            self.count_diagnostic(source_id, "unreconciled", accepted - len(vehicles))
             changed = self.state.update_vehicles(vehicles)
             for item in changed:
                 if self.cache:
@@ -84,12 +93,15 @@ class RealtimeProjector:
                 replace(item, retrieved_at=retrieved_at or datetime.now(UTC))
                 for item in cast(list[TripUpdate], values)
             ]
+            accepted = len(updates)
             updates = [
                 item
                 for item in updates
                 if self.schedule is None
                 or reconcile_trip_update(item, self.schedule).state != "UNRECONCILED"
             ]
+            self.count_diagnostic(source_id, "accepted", len(updates))
+            self.count_diagnostic(source_id, "unreconciled", accepted - len(updates))
             self.state.update_trip_updates(updates)
             if self.cache:
                 await self.cache.put_trip_updates(updates)
@@ -108,6 +120,7 @@ class RealtimeProjector:
                 replace(item, retrieved_at=retrieved_at or datetime.now(UTC))
                 for item in cast(list[Alert], values)
             ]
+            self.count_diagnostic(source_id, "accepted", len(alerts))
             self.state.update_alerts(alerts)
             if self.cache:
                 await self.cache.put_alerts(alerts)
@@ -165,6 +178,22 @@ async def run_poller(
                 try:
                     parsed = parser(payload)
                     await projector.project(poller.config.source_id, parsed, result.completed_at)
+                    if projector.cache:
+                        now = datetime.now(UTC)
+                        await projector.cache.put_source_health(
+                            poller.config.source_id,
+                            {
+                                "source_id": poller.config.source_id,
+                                "state": poller.health.state(now),
+                                "last_success_at": poller.health.last_success_at,
+                                "consecutive_failures": poller.health.failures,
+                                "last_outcome": result.outcome,
+                                "diagnostics": projector.diagnostics.get(
+                                    poller.config.source_id, {}
+                                ),
+                                "updated_at": now,
+                            },
+                        )
                     logger.info(
                         "feed_processed",
                         source_id=poller.config.source_id,
@@ -172,6 +201,7 @@ async def run_poller(
                         entities=len(parsed),
                     )
                 except Exception:
+                    projector.count_diagnostic(poller.config.source_id, "parser_errors")
                     logger.exception("feed_parse_failed", source_id=poller.config.source_id)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=poller.next_delay())

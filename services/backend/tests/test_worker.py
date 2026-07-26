@@ -72,3 +72,4 @@ async def test_projector_quarantines_unreconciled_vehicles_when_static_is_availa
     )
 
     assert state.vehicles == {}
+    assert projector.diagnostics["mbta-vehicles"]["unreconciled"] == 1
