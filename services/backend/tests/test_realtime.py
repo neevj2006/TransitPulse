@@ -313,6 +313,18 @@ def test_event_broker_scopes_and_replays_monotonic_events() -> None:
     assert broker.since(1, "Red", None) == []
 
 
+def test_event_broker_reconnect_skips_delivered_events_and_preserves_order() -> None:
+    broker = EventBroker()
+    first = broker.publish("vehicle.changed", '{"vehicle_id":"one"}', route_id="Red")
+    second = broker.publish("vehicle.changed", '{"vehicle_id":"two"}', route_id="Red")
+    third = broker.publish("alert.changed", '{"alert_id":"three"}', route_id="Red")
+
+    reconnect = broker.since(first.event_id, "Red", None)
+
+    assert [event.event_id for event in reconnect] == [second.event_id, third.event_id]
+    assert [event.payload for event in reconnect] == [second.payload, third.payload]
+
+
 async def test_sse_connection_limit_returns_a_safe_problem() -> None:
     app = create_app(Settings(environment="test", redis_url=None), probes=[])
     app.state.sse_connections = app.state.settings.sse_connection_limit

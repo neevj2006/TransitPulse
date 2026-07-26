@@ -54,6 +54,36 @@ async def test_live_health_has_versioned_poll_history_metadata(client: AsyncClie
     assert response.json()["meta"]["diagnostics"] == []
 
 
+async def test_live_health_exposes_safe_entity_and_quality_summaries() -> None:
+    class Cache:
+        async def source_health(self, source_id: str) -> dict[str, object]:
+            return {
+                "source_id": source_id,
+                "diagnostics": {
+                    "accepted": 8,
+                    "unreconciled": 2,
+                    "parser_errors": 1,
+                    "duplicates": 3,
+                    "reconciliation_partial": 2,
+                },
+            }
+
+        async def telemetry(self) -> dict[str, int]:
+            return {"key_count": 4, "memory_bytes": 512, "evicted_keys": 0}
+
+    app = create_app(Settings(environment="test", redis_url=None), probes=[])
+    app.state.redis_state_store = Cache()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
+        response = await test_client.get("/api/v1/live/health")
+
+    assert response.status_code == 200
+    source = response.json()["data"][0]
+    assert source["entity_counts"] == {"accepted": 8}
+    assert source["rejection_counts"]["unreconciled"] == 2
+    assert source["diagnostic_rates"]["parser_failure_rate"] == 0.1
+    assert response.json()["meta"]["cache_telemetry"]["memory_bytes"] == 512
+
+
 async def test_invalid_requests_use_a_safe_consistent_problem_shape(client: AsyncClient) -> None:
     response = await client.get(
         "/api/v1/routes", params={"limit": 0}, headers={"X-Request-ID": "test"}
