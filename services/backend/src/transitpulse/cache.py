@@ -51,7 +51,7 @@ class RedisStateStore:
                 "latitude": vehicle.latitude,
                 "longitude": vehicle.longitude,
                 "source_timestamp": timestamp,
-                "retrieved_at": datetime.now(UTC).isoformat(),
+                "retrieved_at": (vehicle.retrieved_at or datetime.now(UTC)).isoformat(),
             }
         )
         async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
@@ -84,6 +84,9 @@ class RedisStateStore:
                     float(item["latitude"]),
                     float(item["longitude"]),
                     datetime.fromisoformat(timestamp) if timestamp else None,
+                    datetime.fromisoformat(item["retrieved_at"])
+                    if item.get("retrieved_at")
+                    else None,
                 )
             )
         return values

@@ -181,6 +181,8 @@ async def test_live_vehicle_response_has_freshness() -> None:
         response = await client.get("/api/v1/live/routes/Red/vehicles")
     assert response.status_code == 200
     assert response.json()["data"][0]["freshness"]["state"] == "HEALTHY"
+    assert response.json()["data"][0]["confidence"] == "HIGH"
+    assert response.json()["data"][0]["retrieved_at"] is None
 
 
 async def test_live_vehicle_bounding_box_and_trip_progress() -> None:

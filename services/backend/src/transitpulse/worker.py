@@ -1,6 +1,7 @@
 import asyncio
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -44,7 +45,11 @@ class RealtimeProjector:
         retrieved_at: datetime | None = None,
     ) -> None:
         if source_id.endswith("vehicles"):
-            changed = self.state.update_vehicles(values)  # type: ignore[arg-type]
+            observed_at = retrieved_at or datetime.now(UTC)
+            vehicles = [
+                replace(item, retrieved_at=observed_at) for item in cast(list[Vehicle], values)
+            ]
+            changed = self.state.update_vehicles(vehicles)
             for item in changed:
                 if self.cache:
                     await self.cache.put_vehicle(item)
@@ -58,7 +63,7 @@ class RealtimeProjector:
                         item.route_id,
                     )
             if self.history:
-                await self.history.record_vehicles(changed, retrieved_at or datetime.now(UTC))
+                await self.history.record_vehicles(changed, observed_at)
         elif source_id.endswith("trip-updates"):
             updates = cast(list[TripUpdate], values)
             self.state.update_trip_updates(updates)
