@@ -80,6 +80,49 @@ async def routes(
     )
 
 
+@router.get("/search", response_model=Envelope)
+async def search(
+    request: Request,
+    q: str = Query(min_length=1, max_length=100),
+    limit: int = Query(20, ge=1, le=50),
+) -> Envelope:
+    """Return labelled route, stop, and destination matches for rider search."""
+    schedule = _schedule(request)
+    needle = q.casefold()
+    route_matches = [
+        {
+            "kind": "route",
+            "id": route.route_id,
+            "label": route.short_name or route.route_id,
+            "detail": route.long_name,
+            "route_color": route.color,
+        }
+        for route in schedule.routes.values()
+        if needle
+        in " ".join(filter(None, (route.route_id, route.short_name, route.long_name))).casefold()
+    ]
+    stop_matches = [
+        {"kind": "stop", "id": stop.stop_id, "label": stop.name, "detail": stop.parent_station}
+        for stop in schedule.stops.values()
+        if needle in f"{stop.stop_id} {stop.name}".casefold()
+    ]
+    destination_matches = [
+        {
+            "kind": "destination",
+            "id": headsign,
+            "label": headsign,
+            "detail": "Scheduled destination",
+        }
+        for headsign in sorted({trip.headsign for trip in schedule.trips.values() if trip.headsign})
+        if needle in headsign.casefold()
+    ]
+    results = route_matches + stop_matches + destination_matches
+    results.sort(
+        key=lambda item: (str(item["kind"]), str(item["label"]).casefold(), str(item["id"]))
+    )
+    return _result(results[:limit], schedule, query=q, result_count=len(results))
+
+
 @router.get("/routes/{route_id}", response_model=Envelope)
 async def route(request: Request, route_id: str) -> Envelope:
     schedule = _schedule(request)

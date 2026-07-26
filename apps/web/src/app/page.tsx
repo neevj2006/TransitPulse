@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { ServiceAlert, SourceBadge, StatePanel } from "@/components/trust";
+import { NearbyStops } from "@/components/nearby-stops";
+import { ServiceAlert, SourceBadge } from "@/components/trust";
+import { UniversalSearch } from "@/components/universal-search";
 
 export default function Home() {
   return (
@@ -17,20 +19,9 @@ export default function Home() {
             TransitPulse keeps MBTA schedule and realtime information visibly
             distinct so you can make informed choices.
           </p>
-          <form action="/search" className="mt-6 flex gap-2">
-            <label className="sr-only" htmlFor="home-search">
-              Search routes or stops
-            </label>
-            <input
-              id="home-search"
-              name="q"
-              className="bg-surface border-border-strong min-h-12 min-w-0 flex-1 rounded-md border px-4"
-              placeholder="Search a route or stop"
-            />
-            <button className="bg-brand-strong min-h-12 rounded-md px-5 font-semibold text-white">
-              Search
-            </button>
-          </form>
+          <div className="mt-6">
+            <UniversalSearch />
+          </div>
         </section>
         <section
           aria-label="Network status"
@@ -51,9 +42,7 @@ export default function Home() {
           </span>
         </ServiceAlert>
         <section className="grid gap-4 md:grid-cols-2">
-          <StatePanel kind="empty" title="No recent places yet">
-            Search for a route or stop to start exploring the network.
-          </StatePanel>
+          <NearbyStops />
           <Link className="card hover:bg-surface-muted block" href="/map">
             <h2 className="font-semibold">Explore the live map</h2>
             <p className="text-muted mt-1 text-sm">
