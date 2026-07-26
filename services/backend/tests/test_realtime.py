@@ -12,6 +12,7 @@ from transitpulse.app import create_app
 from transitpulse.config import Settings
 from transitpulse.diagnostics import vehicle_quality
 from transitpulse.events import EventBroker
+from transitpulse.live_api import service_date_for
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
 from transitpulse.realtime import (
     CurrentState,
@@ -24,7 +25,7 @@ from transitpulse.realtime import (
     parse_vehicle_positions,
 )
 from transitpulse.reconciliation import reconcile_vehicle
-from transitpulse.schedule.models import Schedule, Service, Stop, StopTime, Trip
+from transitpulse.schedule.models import Agency, Schedule, Service, Stop, StopTime, Trip
 
 
 def test_parses_vehicle_and_rejects_invalid_coordinates() -> None:
@@ -118,6 +119,15 @@ def test_vehicle_quality_flags_frozen_and_impossible_jumps() -> None:
     )
     assert "VEHICLE_FROZEN" in frozen
     assert "VEHICLE_IMPOSSIBLE_JUMP" in jumped
+
+
+def test_service_date_uses_mbta_timezone_across_dst_boundary() -> None:
+    schedule = Schedule(
+        "test", "checksum", agencies={"MBTA": Agency("MBTA", "MBTA", "America/New_York")}
+    )
+
+    assert service_date_for(schedule, datetime(2026, 3, 8, 4, 30, tzinfo=UTC)) == "2026-03-07"
+    assert service_date_for(schedule, datetime(2026, 3, 8, 7, 30, tzinfo=UTC)) == "2026-03-08"
 
 
 async def test_poller_stores_payload_and_uses_conditional_headers(tmp_path: Path) -> None:
