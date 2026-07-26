@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 
 from transitpulse.cache import RedisStateStore
+from transitpulse.diagnostics import diagnostic_rates
 from transitpulse.events import EventBroker
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.models import Schedule
@@ -79,6 +80,7 @@ async def health(request: Request) -> dict[str, object]:
             for key, value in entity_diagnostics.items()
             if str(key).startswith("reconciliation_") or str(key).endswith("_unreconciled")
         }
+        item["diagnostic_rates"] = diagnostic_rates(entity_diagnostics)
     return {
         "schema_version": "1.0.0",
         "data": data,

@@ -15,6 +15,16 @@ class FeedDiagnostic:
     consecutive_failures: int
 
 
+def diagnostic_rates(counts: dict[str, int]) -> dict[str, float]:
+    """Return transparent parser/reconciliation rates for a single source."""
+    total = max(counts.get("accepted", 0) + counts.get("unreconciled", 0), 1)
+    return {
+        "parser_failure_rate": counts.get("parser_errors", 0) / total,
+        "reconciliation_failure_rate": counts.get("unreconciled", 0) / total,
+        "duplicate_rate": counts.get("duplicates", 0) / total,
+    }
+
+
 def summarize(
     source_id: str, health: SourceHealth, history: list[PollResult], now: datetime | None = None
 ) -> FeedDiagnostic:

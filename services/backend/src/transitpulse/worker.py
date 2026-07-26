@@ -88,6 +88,7 @@ class RealtimeProjector:
                 item.vehicle_id: self.state.vehicles.get(item.vehicle_id) for item in vehicles
             }
             changed = self.state.update_vehicles(vehicles)
+            self.count_diagnostic(source_id, "duplicates", len(vehicles) - len(changed))
             for item in changed:
                 previous = previous_values[item.vehicle_id]
                 if previous and previous != item:
@@ -133,6 +134,7 @@ class RealtimeProjector:
             self.count_diagnostic(source_id, "accepted", len(updates))
             self.count_diagnostic(source_id, "unreconciled", accepted - len(updates))
             self.state.update_trip_updates(updates)
+            self.count_diagnostic(source_id, "duplicates", accepted - len(updates))
             if self.cache:
                 await self.cache.put_trip_updates(updates)
             for item in updates:
