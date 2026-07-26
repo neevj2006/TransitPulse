@@ -338,13 +338,21 @@ async def alerts(
     return {
         "schema_version": "1.0.0",
         "data": [
-            item
-            if isinstance(item, dict)
-            else {
-                "alert_id": item.entity_id,
-                "header": item.header,
-                "route_ids": item.route_ids,
-                "stop_ids": item.stop_ids,
+            {
+                **(
+                    item
+                    if isinstance(item, dict)
+                    else {
+                        "alert_id": item.entity_id,
+                        "header": item.header,
+                        "route_ids": item.route_ids,
+                        "stop_ids": item.stop_ids,
+                        "retrieved_at": item.retrieved_at,
+                    }
+                ),
+                "source_timestamp": None,
+                "freshness": {"state": "HEALTHY", "age_seconds": 0},
+                "confidence": "MEDIUM",
             }
             for item in values[:100]
         ],
