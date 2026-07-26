@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { TransitMap } from "@/components/transit-map";
 import { StatePanel } from "@/components/trust";
-import { VehicleList } from "@/components/vehicle-list";
+import { LiveSystemMap } from "@/components/live-system-map";
 
 export default function MapPage() {
   return (
@@ -15,8 +14,7 @@ export default function MapPage() {
             available below.
           </p>
         </header>
-        <TransitMap routeName="MBTA network" />
-        <VehicleList vehicles={[]} />
+        <LiveSystemMap />
         <StatePanel kind="stale" title="Last-known locations expire">
           Stale vehicles are never presented as live and are removed after the
           configured TTL.

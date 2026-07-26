@@ -152,7 +152,12 @@ export function LoadingSkeleton({
   label?: string;
 }) {
   return (
-    <div aria-label={label} aria-busy="true" className="card space-y-3">
+    <div
+      role="status"
+      aria-label={label}
+      aria-busy="true"
+      className="card space-y-3"
+    >
       <div className="bg-surface-muted h-5 w-1/3 rounded" />
       <div className="bg-surface-muted h-4 w-full rounded" />
       <div className="bg-surface-muted h-4 w-2/3 rounded" />

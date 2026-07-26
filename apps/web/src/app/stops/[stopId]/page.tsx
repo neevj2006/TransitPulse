@@ -1,6 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { ArrivalBoard } from "@/components/arrival-board";
-import { StatePanel } from "@/components/trust";
+import { StopArrivals } from "@/components/stop-arrivals";
 
 export default async function StopPage({
   params,
@@ -20,12 +19,8 @@ export default async function StopPage({
           published GTFS feed.
         </p>
       </header>
-      <div className="mt-6 space-y-4">
-        <StatePanel kind="fallback" title="Live predictions unavailable">
-          Scheduled departures remain visible while realtime information
-          reconnects.
-        </StatePanel>
-        <ArrivalBoard arrivals={[]} />
+      <div className="mt-6">
+        <StopArrivals stopId={stopId} />
       </div>
     </AppShell>
   );
