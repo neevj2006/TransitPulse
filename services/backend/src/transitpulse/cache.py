@@ -188,6 +188,16 @@ class RedisStateStore:
         )
         return json.loads(raw) if raw else None
 
+    async def telemetry(self) -> dict[str, int | None]:
+        """Return bounded operational measurements without exposing Redis internals."""
+        info = await self.client.info("memory")  # pyright: ignore[reportUnknownMemberType]
+        key_count = await self.client.dbsize()  # pyright: ignore[reportUnknownMemberType]
+        return {
+            "key_count": int(key_count),
+            "memory_bytes": int(info.get("used_memory", 0)),
+            "evicted_keys": int(info.get("evicted_keys", 0)),
+        }
+
     async def publish_event(
         self, kind: str, payload: str, route_id: str | None = None, stop_id: str | None = None
     ) -> LiveEvent:

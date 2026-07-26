@@ -2,6 +2,7 @@
 # pyright: reportUnknownVariableType=false, reportGeneralTypeIssues=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportOperatorIssue=false
 import asyncio
 from datetime import UTC, date, datetime
+from typing import cast
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -65,6 +66,19 @@ async def health(request: Request) -> dict[str, object]:
                 )
             )
             diagnostics = [dict(row) for row in summary.mappings()]
+    cache_telemetry = await cache.telemetry() if cache else None
+    for item in data:
+        entity_diagnostics = cast(dict[str, int], item.get("diagnostics", {}))
+        item["entity_counts"] = {"accepted": entity_diagnostics.get("accepted", 0)}
+        item["rejection_counts"] = {
+            "unreconciled": entity_diagnostics.get("unreconciled", 0),
+            "parser_errors": entity_diagnostics.get("parser_errors", 0),
+        }
+        item["reconciliation"] = {
+            key: value
+            for key, value in entity_diagnostics.items()
+            if str(key).startswith("reconciliation_") or str(key).endswith("_unreconciled")
+        }
     return {
         "schema_version": "1.0.0",
         "data": data,
@@ -73,6 +87,7 @@ async def health(request: Request) -> dict[str, object]:
             "generated_at": now,
             "recent_polls": history,
             "diagnostics": diagnostics,
+            "cache_telemetry": cache_telemetry,
         },
     }
 

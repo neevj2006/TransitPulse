@@ -10,6 +10,7 @@ import httpx
 import structlog
 
 from transitpulse.cache import RedisStateStore
+from transitpulse.diagnostics import vehicle_quality
 from transitpulse.events import EventBroker
 from transitpulse.history import RealtimeHistoryStore
 from transitpulse.polling import FeedConfig, FeedPoller, RawSnapshotStore
@@ -65,16 +66,33 @@ class RealtimeProjector:
                 replace(item, retrieved_at=observed_at) for item in cast(list[Vehicle], values)
             ]
             accepted = len(vehicles)
+            reconciled = [
+                (item, reconcile_vehicle(item, self.schedule)) if self.schedule else (item, None)
+                for item in vehicles
+            ]
+            for _, reconciliation in reconciled:
+                if reconciliation:
+                    self.count_diagnostic(
+                        source_id, f"reconciliation_{reconciliation.state.lower()}"
+                    )
+                    if reconciliation.reason:
+                        self.count_diagnostic(source_id, reconciliation.reason.lower())
             vehicles = [
                 item
-                for item in vehicles
-                if self.schedule is None
-                or reconcile_vehicle(item, self.schedule).state != "UNRECONCILED"
+                for item, reconciliation in reconciled
+                if not reconciliation or reconciliation.state != "UNRECONCILED"
             ]
             self.count_diagnostic(source_id, "accepted", len(vehicles))
             self.count_diagnostic(source_id, "unreconciled", accepted - len(vehicles))
+            previous_values = {
+                item.vehicle_id: self.state.vehicles.get(item.vehicle_id) for item in vehicles
+            }
             changed = self.state.update_vehicles(vehicles)
             for item in changed:
+                previous = previous_values[item.vehicle_id]
+                if previous and previous != item:
+                    for signal in vehicle_quality(previous, item):
+                        self.count_diagnostic(source_id, signal.lower())
                 if self.cache:
                     await self.cache.put_vehicle(item)
                 self.broker.publish(
@@ -94,11 +112,23 @@ class RealtimeProjector:
                 for item in cast(list[TripUpdate], values)
             ]
             accepted = len(updates)
+            reconciled = [
+                (item, reconcile_trip_update(item, self.schedule))
+                if self.schedule
+                else (item, None)
+                for item in updates
+            ]
+            for _, reconciliation in reconciled:
+                if reconciliation:
+                    self.count_diagnostic(
+                        source_id, f"reconciliation_{reconciliation.state.lower()}"
+                    )
+                    if reconciliation.reason:
+                        self.count_diagnostic(source_id, reconciliation.reason.lower())
             updates = [
                 item
-                for item in updates
-                if self.schedule is None
-                or reconcile_trip_update(item, self.schedule).state != "UNRECONCILED"
+                for item, reconciliation in reconciled
+                if not reconciliation or reconciliation.state != "UNRECONCILED"
             ]
             self.count_diagnostic(source_id, "accepted", len(updates))
             self.count_diagnostic(source_id, "unreconciled", accepted - len(updates))
