@@ -16,11 +16,11 @@ export function ThemeSelect() {
 
   return (
     <label className="text-muted flex min-h-11 items-center gap-2 text-sm font-medium">
-      <MoonStar aria-hidden="true" className="size-4" />
+      <MoonStar aria-hidden="true" className="hidden size-4 sm:block" />
       <span className="sr-only">Color theme</span>
       <select
         aria-label="Color theme"
-        className="border-border-strong bg-surface text-text min-h-11 rounded-lg border px-3"
+        className="border-border-strong bg-surface text-text min-h-11 rounded-lg border px-2 sm:px-3"
         disabled={!mounted}
         value={mounted ? theme : "system"}
         onChange={(event) => setTheme(event.target.value)}

@@ -26,6 +26,20 @@
   --focus-inner: #ffffff;
   --status-success: #146b35;
   --status-success-surface: #e7f6ea;
+  --status-live: #086047;
+  --status-live-surface: #e4f7f0;
+  --status-scheduled: #465465;
+  --status-scheduled-surface: #eef2f6;
+  --status-estimate: #5635a7;
+  --status-estimate-surface: #f0eaff;
+  --status-observed: #0b6078;
+  --status-observed-surface: #e2f4f8;
+  --status-warning: #7a4500;
+  --status-warning-surface: #fff3d6;
+  --status-error: #8f1d25;
+  --status-error-surface: #fdebed;
+  --status-offline: #465465;
+  --status-offline-surface: #e7edf4;
   --status-unknown: #526173;
   --status-unknown-surface: #eef2f6;
 }
@@ -53,6 +67,20 @@
   --focus-inner: #0b111b;
   --status-success: #86e6a8;
   --status-success-surface: #123522;
+  --status-live: #75e1bd;
+  --status-live-surface: #0f312a;
+  --status-scheduled: #b9c4d1;
+  --status-scheduled-surface: #1b2532;
+  --status-estimate: #cfbdff;
+  --status-estimate-surface: #2c2146;
+  --status-observed: #75d6ea;
+  --status-observed-surface: #10313a;
+  --status-warning: #ffd27a;
+  --status-warning-surface: #3b2a0f;
+  --status-error: #ffadb3;
+  --status-error-surface: #3f1b21;
+  --status-offline: #d0d8e2;
+  --status-offline-surface: #222c39;
   --status-unknown: #b9c4d1;
   --status-unknown-surface: #1b2532;
 }
@@ -79,6 +107,20 @@
   --color-focus-inner: var(--focus-inner);
   --color-status-success: var(--status-success);
   --color-status-success-surface: var(--status-success-surface);
+  --color-status-live: var(--status-live);
+  --color-status-live-surface: var(--status-live-surface);
+  --color-status-scheduled: var(--status-scheduled);
+  --color-status-scheduled-surface: var(--status-scheduled-surface);
+  --color-status-estimate: var(--status-estimate);
+  --color-status-estimate-surface: var(--status-estimate-surface);
+  --color-status-observed: var(--status-observed);
+  --color-status-observed-surface: var(--status-observed-surface);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-surface: var(--status-warning-surface);
+  --color-status-error: var(--status-error);
+  --color-status-error-surface: var(--status-error-surface);
+  --color-status-offline: var(--status-offline);
+  --color-status-offline-surface: var(--status-offline-surface);
   --color-status-unknown: var(--status-unknown);
   --color-status-unknown-surface: var(--status-unknown-surface);
   --font-sans: "Geist", sans-serif;
@@ -99,6 +141,30 @@ body {
   background: var(--canvas);
   color: var(--text);
   font-family: "Geist", sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+.page-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 6rem;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  padding: 1.25rem;
+}
+@media (min-width: 640px) {
+  .page-container {
+    padding: 2rem 1.5rem;
+  }
+  .card {
+    padding: 1.5rem;
+  }
 }
 
 :focus-visible {
