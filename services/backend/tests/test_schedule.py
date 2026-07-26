@@ -63,6 +63,19 @@ def test_import_preserves_after_midnight_time_and_exceptions() -> None:
     assert schedule.agencies["MBTA"].timezone == "America/New_York"
     assert schedule.transfers[0].minimum_transfer_seconds == 120
     assert len(schedule.transfers) == 1
+    assert schedule.import_statistics()["stop_times"] == 2
+
+
+def test_import_reports_missing_optional_file_warning() -> None:
+    payload = fixture()
+    with zipfile.ZipFile(io.BytesIO(payload)) as source:
+        files = {
+            name: source.read(name).decode() for name in source.namelist() if name != "shapes.txt"
+        }
+
+    schedule = import_archive(archive(files))
+
+    assert "OPTIONAL_FILE_MISSING:shapes.txt" in schedule.warnings
 
 
 @pytest.mark.parametrize(

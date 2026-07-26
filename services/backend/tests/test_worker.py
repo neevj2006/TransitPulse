@@ -6,6 +6,7 @@ import pytest
 from transitpulse.events import EventBroker
 from transitpulse.history import expired_partition_names
 from transitpulse.realtime import CurrentState, Vehicle
+from transitpulse.schedule.models import Schedule
 from transitpulse.worker import RealtimeProjector, build_pollers
 
 
@@ -58,3 +59,17 @@ async def test_projector_publishes_vehicle_events_to_shared_cache() -> None:
     )
     assert cache.events[0][0] == "vehicle.changed"
     assert cache.events[0][2] == "Red"
+
+
+@pytest.mark.asyncio
+async def test_projector_quarantines_unreconciled_vehicles_when_static_is_available() -> None:
+    state = CurrentState()
+    projector = RealtimeProjector(state, EventBroker(), schedule=Schedule("v", "checksum"))
+
+    await projector.project(
+        "mbta-vehicles",
+        [Vehicle("entity", "vehicle", "Missing", None, 42.0, -71.0, datetime.now(UTC))],
+    )
+
+    assert state.vehicles == {}
+    assert projector.diagnostics["mbta-vehicles"]["unreconciled"] == 1

@@ -1,7 +1,7 @@
 # ruff: noqa: E501
 # pyright: reportUnknownVariableType=false, reportGeneralTypeIssues=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportOperatorIssue=false
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -15,6 +15,11 @@ from transitpulse.realtime import CurrentState
 from transitpulse.schedule.models import Schedule
 
 router = APIRouter(prefix="/api/v1/live", tags=["realtime"])
+
+
+def service_date_for(schedule: Schedule, moment: datetime) -> str:
+    agency = next(iter(schedule.agencies.values()), None)
+    return moment.astimezone(ZoneInfo(agency.timezone if agency else "UTC")).date().isoformat()
 
 
 @router.get("/health")
@@ -286,8 +291,7 @@ async def arrivals(request: Request, stop_id: str) -> dict[str, object]:
     if not values:
         schedule: Schedule | None = getattr(request.app.state, "schedule", None)
         if schedule:
-            agency = next(iter(schedule.agencies.values()), None)
-            service_date = now.astimezone(ZoneInfo(agency.timezone if agency else "UTC")).date()
+            service_date = date.fromisoformat(service_date_for(schedule, now))
             active = schedule.active_service_ids(service_date)
             for stop_time in schedule.stop_times:
                 trip = schedule.trips[stop_time.trip_id]

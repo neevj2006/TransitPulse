@@ -9,11 +9,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from transitpulse.cache import RedisStateStore
-from transitpulse.config import get_settings
+from transitpulse.config import Settings, get_settings
 from transitpulse.history import RealtimeHistoryStore
 from transitpulse.logging import configure_logging
 from transitpulse.schedule.importer import download_archive, import_archive
 from transitpulse.schedule.persistence import persist_and_activate
+from transitpulse.schedule.repository import load_active_schedule
 from transitpulse.worker import run_worker as run_realtime_worker
 
 
@@ -44,7 +45,24 @@ def run_worker() -> None:
         else None
     )
     asyncio.run(
-        run_realtime_worker(
+        _run_configured_worker(
+            settings,
+            cache,
+            history,
+        )
+    )
+
+
+async def _run_configured_worker(
+    settings: Settings,
+    cache: RedisStateStore | None,
+    history: RealtimeHistoryStore | None,
+) -> None:
+    database_url = settings.database_url
+    engine = create_async_engine(database_url) if database_url else None
+    try:
+        schedule = await load_active_schedule(engine) if engine else None
+        await run_realtime_worker(
             settings.raw_snapshot_path,
             settings.vehicle_positions_url,
             settings.trip_updates_url,
@@ -53,8 +71,11 @@ def run_worker() -> None:
             history,
             settings.raw_snapshot_retention_hours,
             settings.detailed_history_retention_days,
+            schedule,
         )
-    )
+    finally:
+        if engine:
+            await engine.dispose()
 
 
 async def import_static_feed() -> str:
@@ -66,9 +87,10 @@ async def import_static_feed() -> str:
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
             archive = await download_archive(settings.static_gtfs_url, client)
+        imported = import_archive(archive.payload)
         version_id = await persist_and_activate(
             engine,
-            import_archive(archive.payload),
+            imported,
             source_url=archive.source_url,
             retrieved_at=datetime.fromisoformat(archive.retrieved_at),
         )
@@ -77,6 +99,8 @@ async def import_static_feed() -> str:
             feed_version_id=version_id,
             checksum=archive.checksum,
             source_url=archive.source_url,
+            import_statistics=imported.import_statistics(),
+            warnings=imported.warnings,
         )
         return version_id
     finally:
