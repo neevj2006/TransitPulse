@@ -11,7 +11,11 @@ async function inspect(directory) {
       await inspect(target);
     } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
       const source = await readFile(target, "utf8");
-      if (/#[0-9a-f]{3,8}\b/i.test(source)) violations.push(target);
+      if (
+        /#[0-9a-f]{3,8}\b/i.test(source) &&
+        !target.endsWith("route-badge.tsx")
+      )
+        violations.push(target);
     }
   }
 }

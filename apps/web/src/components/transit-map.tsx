@@ -1,16 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Feature, LineString, Point } from "geojson";
 import { Map } from "maplibre-gl";
 import { LocateFixed, RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
 import { publicEnv } from "@/lib/env";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-type TransitMapProps = { routeName: string };
+type TransitMapProps = {
+  routeName: string;
+  routeLine?: Feature<LineString>;
+  stops?: Feature<Point>[];
+  vehicles?: Feature<Point>[];
+};
 
-export function TransitMap({ routeName }: TransitMapProps) {
+export function TransitMap({
+  routeName,
+  routeLine,
+  stops = [],
+  vehicles = [],
+}: TransitMapProps) {
   const container = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<Map | null>(null);
   const [failed, setFailed] = useState(false);
   const { resolvedTheme } = useTheme();
 
@@ -26,9 +38,72 @@ export function TransitMap({ routeName }: TransitMapProps) {
           : publicEnv.NEXT_PUBLIC_MAP_STYLE_LIGHT_URL,
       attributionControl: false,
     });
+    mapRef.current = map;
+    map.on("load", () => {
+      const token = (name: string) =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue(name)
+          .trim();
+      map.addSource("route", {
+        type: "geojson",
+        data: routeLine ?? { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "route-casing",
+        type: "line",
+        source: "route",
+        paint: {
+          "line-color": token("--text"),
+          "line-width": 10,
+          "line-opacity": 0.6,
+        },
+      });
+      map.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], token("--brand")],
+          "line-width": 6,
+        },
+      });
+      map.addSource("stops", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: stops },
+      });
+      map.addLayer({
+        id: "stop-markers",
+        type: "circle",
+        source: "stops",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": token("--surface"),
+          "circle-stroke-color": token("--text"),
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addSource("vehicles", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: vehicles },
+      });
+      map.addLayer({
+        id: "vehicle-markers",
+        type: "circle",
+        source: "vehicles",
+        paint: {
+          "circle-radius": 10,
+          "circle-color": ["coalesce", ["get", "color"], token("--brand")],
+          "circle-stroke-color": token("--surface"),
+          "circle-stroke-width": 2,
+        },
+      });
+    });
     map.on("error", () => setFailed(true));
-    return () => map.remove();
-  }, [resolvedTheme]);
+    return () => {
+      mapRef.current = null;
+      map.remove();
+    };
+  }, [resolvedTheme, routeLine, stops, vehicles]);
 
   return (
     <section
@@ -58,6 +133,9 @@ export function TransitMap({ routeName }: TransitMapProps) {
             <button
               type="button"
               aria-label="Recenter map"
+              onClick={() =>
+                mapRef.current?.jumpTo({ center: [-71.06, 42.36], zoom: 10 })
+              }
               className="bg-surface grid size-11 place-items-center rounded-md border shadow-sm"
             >
               <LocateFixed aria-hidden="true" className="size-5" />
@@ -65,6 +143,7 @@ export function TransitMap({ routeName }: TransitMapProps) {
             <button
               type="button"
               aria-label="Reset map bearing"
+              onClick={() => mapRef.current?.resetNorth()}
               className="bg-surface grid size-11 place-items-center rounded-md border shadow-sm"
             >
               <RotateCcw aria-hidden="true" className="size-5" />
