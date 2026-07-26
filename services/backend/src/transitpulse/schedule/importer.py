@@ -225,6 +225,7 @@ def import_archive(payload: bytes) -> Schedule:
                 service_id,
                 row.get("shape_id") or None,
                 row.get("trip_headsign") or None,
+                int(row["direction_id"]) if row.get("direction_id") else None,
             )
         previous: dict[str, int] = {}
         for row in _rows(zf, "stop_times.txt"):

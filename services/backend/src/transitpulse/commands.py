@@ -62,6 +62,7 @@ async def _run_configured_worker(
     engine = create_async_engine(database_url) if database_url else None
     try:
         schedule = await load_active_schedule(engine) if engine else None
+        previous_schedule = await load_active_schedule(engine, "SUPERSEDED") if engine else None
         await run_realtime_worker(
             settings.raw_snapshot_path,
             settings.vehicle_positions_url,
@@ -72,6 +73,7 @@ async def _run_configured_worker(
             settings.raw_snapshot_retention_hours,
             settings.detailed_history_retention_days,
             schedule,
+            previous_schedule,
         )
     finally:
         if engine:

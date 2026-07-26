@@ -1,0 +1,10 @@
+{
+  "source": "Public MBTA-compatible GTFS-Realtime fixture promoted for offline tests",
+  "recorded_at": "2023-11-14T22:13:20Z",
+  "parser_version": "gtfs-realtime-v1",
+  "samples": {
+    "vehicles": "CgsKAzIuMBiA4s+qBhJKChB2ZWhpY2xlLXJlY29yZGVkIjYKFAoNdHJpcC1yZWNvcmRlZCoDUmVkEgoNhWspQhW4Ho7CKIDiz6oGQgwKCnYtcmVjb3JkZWQ=",
+    "trip_updates": "CgsKAzIuMBiA4s+qBhJICg10cmlwLXJlY29yZGVkGjcKFAoNdHJpcC1yZWNvcmRlZCoDUmVkEhkIARIGEPjiz6oGIg1zdG9wLXJlY29yZGVkIIDiz6oG",
+    "alerts": "CgsKAzIuMBiA4s+qBhI5Cg5hbGVydC1yZWNvcmRlZConKgUSA1JlZFIeChwKFlJlY29yZGVkIHNlcnZpY2UgYWxlcnQSAmVu"
+  }
+}

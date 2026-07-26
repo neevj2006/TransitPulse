@@ -1,8 +1,11 @@
 # ruff: noqa: E501
+import base64
 import io
+import json
 import zipfile
 from collections.abc import AsyncGenerator
 from datetime import date
+from pathlib import Path
 from typing import cast
 
 import httpx
@@ -88,6 +91,19 @@ def test_import_reports_missing_optional_file_warning() -> None:
 def test_rejects_unsafe_or_incomplete_archives(payload: bytes, code: str) -> None:
     with pytest.raises(GtfsValidationError, match=code):
         import_archive(payload)
+
+
+def test_recorded_safe_malformed_missing_and_malicious_archive_fixtures() -> None:
+    fixture_path = Path(__file__).parents[3] / "data" / "fixtures" / "gtfs" / "archive-cases.json"
+    cases = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    assert import_archive(archive(cases["safe"])).version
+    with pytest.raises(GtfsValidationError, match="GTFS_REQUIRED_FILE_MISSING"):
+        import_archive(archive(cases["missing_required"]))
+    with pytest.raises(GtfsValidationError, match="ZIP_UNSAFE_PATH"):
+        import_archive(archive(cases["malicious_path"]))
+    with pytest.raises(GtfsValidationError, match="ZIP_INVALID"):
+        import_archive(base64.b64decode(cases["malformed_base64"]))
 
 
 def test_rejects_invalid_gtfs_time() -> None:

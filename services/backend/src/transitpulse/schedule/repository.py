@@ -14,17 +14,22 @@ from transitpulse.schedule.models import (
 )
 
 
-async def load_active_schedule(engine: AsyncEngine) -> Schedule | None:
-    """Load the single atomically activated GTFS version for API reads."""
+async def load_active_schedule(
+    engine: AsyncEngine, import_status: str = "ACTIVE"
+) -> Schedule | None:
+    """Load the latest active or immediately preceding GTFS version."""
+    if import_status not in {"ACTIVE", "SUPERSEDED"}:
+        raise ValueError("STATIC_FEED_STATUS_INVALID")
     async with engine.connect() as connection:
         version_row = (
             (
                 await connection.execute(
                     text(
                         "SELECT feed_version_id, feed_label, payload_checksum "
-                        "FROM static_feed_versions WHERE import_status = 'ACTIVE' "
+                        "FROM static_feed_versions WHERE import_status = :status "
                         "ORDER BY retrieved_at DESC LIMIT 1"
-                    )
+                    ),
+                    {"status": import_status},
                 )
             )
             .mappings()
@@ -100,13 +105,18 @@ async def load_active_schedule(engine: AsyncEngine) -> Schedule | None:
         }
         trips = await connection.execute(
             text(
-                "SELECT trip_id, route_id, service_id, shape_id, headsign FROM trips WHERE feed_version_id = :version"
+                "SELECT trip_id, route_id, service_id, shape_id, headsign, direction_id FROM trips WHERE feed_version_id = :version"
             ),
             {"version": version_id},
         )
         schedule.trips = {
             str(row.trip_id): Trip(
-                str(row.trip_id), str(row.route_id), str(row.service_id), row.shape_id, row.headsign
+                str(row.trip_id),
+                str(row.route_id),
+                str(row.service_id),
+                row.shape_id,
+                row.headsign,
+                row.direction_id,
             )
             for row in trips
         }

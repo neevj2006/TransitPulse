@@ -93,10 +93,17 @@ class RedisStateStore:
 
     async def put_trip_updates(self, values: list[TripUpdate], ttl_seconds: int = 180) -> None:
         for item in values:
+            key = f"tp:v1:{{mbta}}:trip:{item.trip_id}"
+            existing = await self.client.get(key)  # pyright: ignore[reportUnknownMemberType]
+            if existing and item.timestamp:
+                existing_timestamp = json.loads(existing).get("timestamp")
+                if existing_timestamp and item.timestamp.isoformat() < existing_timestamp:
+                    continue
             payload = {
                 "trip_id": item.trip_id,
                 "route_id": item.route_id,
                 "timestamp": item.timestamp.isoformat() if item.timestamp else None,
+                "source_timestamp": item.timestamp.isoformat() if item.timestamp else None,
                 "retrieved_at": item.retrieved_at.isoformat() if item.retrieved_at else None,
                 "predictions": [
                     {
@@ -108,12 +115,14 @@ class RedisStateStore:
                         if prediction.departure_time
                         else None,
                         "relationship": prediction.relationship,
+                        "arrival_delay_seconds": prediction.arrival_delay_seconds,
+                        "departure_delay_seconds": prediction.departure_delay_seconds,
                     }
                     for prediction in item.predictions
                 ],
             }
             async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
-                pipe.set(f"tp:v1:{{mbta}}:trip:{item.trip_id}", json.dumps(payload), ex=ttl_seconds)
+                pipe.set(key, json.dumps(payload), ex=ttl_seconds)
                 for prediction in item.predictions:
                     index = f"tp:v1:{{mbta}}:stop:{prediction.stop_id}:trips"
                     pipe.sadd(index, item.trip_id)
@@ -143,6 +152,9 @@ class RedisStateStore:
                 "route_ids": item.route_ids,
                 "stop_ids": item.stop_ids,
                 "retrieved_at": item.retrieved_at.isoformat() if item.retrieved_at else None,
+                "source_timestamp": (
+                    item.source_timestamp.isoformat() if item.source_timestamp else None
+                ),
             }
             async with self.client.pipeline(transaction=True) as pipe:  # pyright: ignore[reportUnknownMemberType]
                 pipe.set(
@@ -190,12 +202,19 @@ class RedisStateStore:
 
     async def telemetry(self) -> dict[str, int | None]:
         """Return bounded operational measurements without exposing Redis internals."""
-        info = await self.client.info("memory")  # pyright: ignore[reportUnknownMemberType]
+        memory = await self.client.info("memory")  # pyright: ignore[reportUnknownMemberType]
+        stats = await self.client.info("stats")  # pyright: ignore[reportUnknownMemberType]
         key_count = await self.client.dbsize()  # pyright: ignore[reportUnknownMemberType]
+        hits = int(stats.get("keyspace_hits", 0))
+        misses = int(stats.get("keyspace_misses", 0))
         return {
             "key_count": int(key_count),
-            "memory_bytes": int(info.get("used_memory", 0)),
-            "evicted_keys": int(info.get("evicted_keys", 0)),
+            "memory_bytes": int(memory.get("used_memory", 0)),
+            "evicted_keys": int(stats.get("evicted_keys", 0)),
+            "commands_processed": int(stats.get("total_commands_processed", 0)),
+            "keyspace_hits": hits,
+            "keyspace_misses": misses,
+            "hit_rate_percent": round((hits / (hits + misses)) * 100) if hits + misses else None,
         }
 
     async def publish_event(
