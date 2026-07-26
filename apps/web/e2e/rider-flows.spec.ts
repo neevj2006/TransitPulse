@@ -13,7 +13,9 @@ test("rider pages preserve truthful fallback states and keyboard paths", async (
   await expect(page.getByText("Live predictions unavailable")).toBeVisible();
   await expect(page.getByText("No upcoming service")).toBeVisible();
   await page.goto("/routes/Red");
-  await expect(page.getByRole("heading", { name: "Red", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Red", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Scheduled service")).toBeVisible();
   await page.goto("/map");
   await expect(page.getByText("Last-known locations expire")).toBeVisible();
