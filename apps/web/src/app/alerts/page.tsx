@@ -16,6 +16,10 @@ export default function AlertsPage() {
           className="bg-surface border-border-strong min-h-11 w-full max-w-md rounded-md border px-3"
           placeholder="Route, stop, or effect"
         />
+        <p className="text-muted text-sm">
+          Filter by route, stop, effect, severity, or active period. Agency text
+          is shown without generated summaries.
+        </p>
         <StatePanel kind="empty" title="No active alerts">
           When available, agency-provided notices will show their effect,
           affected routes, and source age.
