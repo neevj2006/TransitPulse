@@ -21,7 +21,9 @@ test("rider shell communicates data states across layouts and themes", async ({
         name: "Know what is scheduled, live, and uncertain.",
       }),
     ).toBeVisible();
-    await expect(page.getByText("No recent places yet")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Nearby stops" }),
+    ).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth > window.innerWidth,
