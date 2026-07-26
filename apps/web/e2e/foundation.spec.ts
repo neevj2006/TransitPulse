@@ -8,6 +8,12 @@ test("rider shell communicates data states across layouts and themes", async ({
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
+  await page.route("**/api/v1/live/health", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: [{ state: "HEALTHY" }] }),
+    }),
+  );
 
   for (const viewport of [
     { width: 320, height: 720 },

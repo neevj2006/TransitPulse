@@ -231,6 +231,43 @@ async def vehicles(
     }
 
 
+@router.get("/vehicles")
+async def all_vehicles(request: Request) -> dict[str, object]:
+    """Bounded all-route projection used by the accessible system-map list."""
+    state: CurrentState = request.app.state.current_state
+    cache: RedisStateStore | None = request.app.state.redis_state_store
+    source_vehicles = await cache.vehicles() if cache else list(state.vehicles.values())
+    now = datetime.now(UTC)
+    data = []
+    for vehicle in source_vehicles:
+        age = (
+            int((now - vehicle.source_timestamp).total_seconds())
+            if vehicle.source_timestamp
+            else None
+        )
+        data.append(
+            {
+                "vehicle_id": vehicle.vehicle_id,
+                "route_id": vehicle.route_id,
+                "trip_id": vehicle.trip_id,
+                "latitude": vehicle.latitude,
+                "longitude": vehicle.longitude,
+                "source_timestamp": vehicle.source_timestamp,
+                "retrieved_at": vehicle.retrieved_at,
+                "freshness": {
+                    "state": "HEALTHY" if age is not None and age <= 90 else "STALE",
+                    "age_seconds": age,
+                },
+                "confidence": "HIGH" if age is not None and age <= 90 else "LOW",
+            }
+        )
+    return {
+        "schema_version": "1.0.0",
+        "data": data,
+        "meta": {"request_id": str(uuid4()), "generated_at": now, "limit": 2000},
+    }
+
+
 @router.get("/trips/{trip_id}")
 async def trip_progress(request: Request, trip_id: str) -> dict[str, object]:
     state: CurrentState = request.app.state.current_state

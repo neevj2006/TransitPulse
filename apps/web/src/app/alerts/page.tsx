@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { StatePanel } from "@/components/trust";
+import { AlertList } from "@/components/alert-list";
 export default function AlertsPage() {
   return (
     <AppShell>
@@ -7,24 +7,7 @@ export default function AlertsPage() {
         <p className="text-brand text-sm font-semibold">Agency notices</p>
         <h1 className="mt-1 text-3xl font-semibold">Service alerts</h1>
       </header>
-      <div className="mt-6 space-y-4">
-        <label className="font-semibold" htmlFor="alert-filter">
-          Filter agency alerts
-        </label>
-        <input
-          id="alert-filter"
-          className="bg-surface border-border-strong min-h-11 w-full max-w-md rounded-md border px-3"
-          placeholder="Route, stop, or effect"
-        />
-        <p className="text-muted text-sm">
-          Filter by route, stop, effect, severity, or active period. Agency text
-          is shown without generated summaries.
-        </p>
-        <StatePanel kind="empty" title="No active alerts">
-          When available, agency-provided notices will show their effect,
-          affected routes, and source age.
-        </StatePanel>
-      </div>
+      <AlertList />
     </AppShell>
   );
 }

@@ -26,6 +26,9 @@ it("falls back to bounded polling when the stream errors", () => {
   expect(fallback).toHaveBeenCalledTimes(1);
   vi.advanceTimersByTime(2000);
   expect(fallback).toHaveBeenCalledTimes(3);
+  FakeEventSource.latest?.dispatchEvent(new Event("open"));
+  vi.advanceTimersByTime(2000);
+  expect(fallback).toHaveBeenCalledTimes(3);
   dispose();
   expect(FakeEventSource.latest?.close).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();

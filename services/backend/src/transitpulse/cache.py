@@ -91,6 +91,33 @@ class RedisStateStore:
             )
         return values
 
+    async def vehicles(self, limit: int = 2_000) -> list[Vehicle]:
+        """Return bounded current vehicles for the public system-map projection."""
+        values: list[Vehicle] = []
+        async for key in self.client.scan_iter(match="tp:v1:{mbta}:vehicle:*", count=200):  # pyright: ignore[reportUnknownMemberType]
+            raw = await self.client.get(key)  # pyright: ignore[reportUnknownMemberType]
+            if not raw:
+                continue
+            item = json.loads(raw)
+            timestamp = item.get("source_timestamp")
+            values.append(
+                Vehicle(
+                    str(item.get("entity_id", item["vehicle_id"])),
+                    str(item["vehicle_id"]),
+                    item.get("route_id"),
+                    item.get("trip_id"),
+                    float(item["latitude"]),
+                    float(item["longitude"]),
+                    datetime.fromisoformat(timestamp) if timestamp else None,
+                    datetime.fromisoformat(item["retrieved_at"])
+                    if item.get("retrieved_at")
+                    else None,
+                )
+            )
+            if len(values) >= limit:
+                break
+        return values
+
     async def put_trip_updates(self, values: list[TripUpdate], ttl_seconds: int = 180) -> None:
         for item in values:
             key = f"tp:v1:{{mbta}}:trip:{item.trip_id}"

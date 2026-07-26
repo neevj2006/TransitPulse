@@ -239,6 +239,46 @@ async def arrivals(request: Request, stop_id: str, service_date: date) -> Envelo
     return _result(result[:200], schedule)
 
 
+@router.get("/routes/{route_id}/stops", response_model=Envelope)
+async def route_stops(request: Request, route_id: str, direction_id: int | None = None) -> Envelope:
+    """Return a representative ordered stop sequence for a rider route view."""
+    schedule = _schedule(request)
+    if route_id not in schedule.routes:
+        raise HTTPException(
+            404, detail={"code": "ROUTE_NOT_FOUND", "message": "Route was not found."}
+        )
+    trips = [
+        trip
+        for trip in schedule.trips.values()
+        if trip.route_id == route_id and (direction_id is None or trip.direction_id == direction_id)
+    ]
+    if not trips:
+        return _result({"directions": [], "stops": []}, schedule)
+    representative = sorted(trips, key=lambda trip: trip.trip_id)[0]
+    stop_times = sorted(
+        (item for item in schedule.stop_times if item.trip_id == representative.trip_id),
+        key=lambda item: item.sequence,
+    )
+    return _result(
+        {
+            "directions": sorted(
+                {trip.direction_id for trip in trips if trip.direction_id is not None}
+            ),
+            "headsign": representative.headsign,
+            "stops": [
+                {
+                    "stop_id": item.stop_id,
+                    "name": schedule.stops[item.stop_id].name,
+                    "sequence": item.sequence,
+                    "scheduled_seconds": item.arrival_seconds or item.departure_seconds,
+                }
+                for item in stop_times
+            ],
+        },
+        schedule,
+    )
+
+
 @router.get("/routes/{route_id}/shape", response_model=Envelope)
 async def shape(request: Request, route_id: str) -> Envelope:
     schedule = _schedule(request)

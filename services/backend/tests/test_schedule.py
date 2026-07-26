@@ -157,6 +157,8 @@ async def test_schedule_routes_search_shape_and_arrivals(schedule_client: AsyncC
     ]
     shape = await schedule_client.get("/api/v1/routes/Red/shape")
     assert shape.json()["data"]["features"][0]["geometry"]["type"] == "LineString"
+    route_stops = await schedule_client.get("/api/v1/routes/Red/stops")
+    assert [stop["stop_id"] for stop in route_stops.json()["data"]["stops"]] == ["A", "B"]
     arrivals = await schedule_client.get(
         "/api/v1/stops/B/arrivals", params={"service_date": "2026-07-24"}
     )

@@ -179,11 +179,13 @@ async def test_recorded_fixtures_produce_versioned_live_api_contracts() -> None:
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         vehicles = await client.get("/api/v1/live/routes/Red/vehicles")
+        system_vehicles = await client.get("/api/v1/live/vehicles")
         arrivals = await client.get("/api/v1/live/stops/stop-recorded/arrivals")
         alerts = await client.get("/api/v1/live/alerts", params={"route_id": "Red"})
 
     assert vehicles.json()["schema_version"] == "1.0.0"
     assert vehicles.json()["data"][0]["vehicle_id"] == "v-recorded"
+    assert system_vehicles.json()["data"][0]["vehicle_id"] == "v-recorded"
     assert arrivals.json()["data"][0]["trip_id"] == "trip-recorded"
     assert alerts.json()["data"][0]["alert_id"] == "alert-recorded"
 
