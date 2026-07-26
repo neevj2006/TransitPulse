@@ -4,11 +4,12 @@ from uuid import uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from transitpulse.app import create_app
 from transitpulse.config import Settings
-from transitpulse.schedule.models import Schedule
+from transitpulse.schedule.models import Route, Schedule, Trip
 from transitpulse.schedule.persistence import persist_and_activate
 
 
@@ -77,3 +78,27 @@ async def test_static_feed_version_activation_persists_provenance() -> None:
                     {"id": previous_version_id},
                 )
         await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_failed_static_import_rolls_back_the_pending_feed_version() -> None:
+    database_url = os.getenv("TP_DATABASE_URL")
+    if not database_url:
+        pytest.skip("PostgreSQL URL is not configured")
+    engine = create_async_engine(database_url)
+    checksum = uuid4().hex
+    invalid = Schedule(
+        version="rollback-test",
+        checksum=checksum,
+        routes={"route": Route("route", "R", None, 3)},
+        trips={"trip": Trip("trip", "route", "missing-service", None, None)},
+    )
+    with pytest.raises(IntegrityError):
+        await persist_and_activate(engine, invalid)
+    async with engine.connect() as connection:
+        result = await connection.execute(
+            text("SELECT count(*) FROM static_feed_versions WHERE payload_checksum = :checksum"),
+            {"checksum": checksum},
+        )
+    await engine.dispose()
+    assert result.scalar_one() == 0
