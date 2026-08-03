@@ -17,6 +17,9 @@ async function mockRiderApi(page: import("@playwright/test").Page) {
   });
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    const meta = path.endsWith("/transfer-risk")
+      ? { calculation_version: "2026-08-03.1" }
+      : {};
     const data = path.endsWith("/search")
       ? [
           {
@@ -102,10 +105,28 @@ async function mockRiderApi(page: import("@playwright/test").Page) {
                             freshness: { state: "HEALTHY" },
                           },
                         ]
-                      : [];
+                      : path.endsWith("/transfer-risk")
+                        ? {
+                            sufficient_data: true,
+                            missed_transfer_probability: 0.25,
+                            risk_band: "MEDIUM",
+                            planned_buffer_seconds: 300,
+                            walking_seconds: 180,
+                            walking_time_source: "user",
+                            sample_size: 24,
+                            arrival_sample_size: 24,
+                            departure_sample_size: 24,
+                            source_first_at: "2026-07-01T00:00:00Z",
+                            source_last_at: "2026-08-01T00:00:00Z",
+                            history_stale: false,
+                            assumptions: [
+                              "Historical delays are paired independently.",
+                            ],
+                          }
+                        : [];
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ schema_version: "1.0.0", data, meta: {} }),
+      body: JSON.stringify({ schema_version: "1.0.0", data, meta }),
     });
   });
 }
@@ -146,6 +167,28 @@ test("riders can search, inspect live vehicles, and filter agency alerts", async
   await expect(
     page.getByRole("heading", { name: "No active alerts" }),
   ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("riders can calculate an evidence-labelled transfer risk", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await mockRiderApi(page);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/transfer-risk");
+  await page
+    .getByLabel("Planned connecting departure")
+    .fill("2026-08-05T10:10");
+  await page.getByRole("button", { name: "Calculate transfer risk" }).click();
+  await expect(
+    page.getByRole("heading", { name: /Medium risk/ }),
+  ).toBeVisible();
+  await expect(page.getByText(/not a guarantee/)).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(errors).toEqual([]);
 });

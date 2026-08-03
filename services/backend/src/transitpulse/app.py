@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from transitpulse.analytics_api import router as analytics_router
 from transitpulse.cache import RedisProbe, RedisStateStore
 from transitpulse.config import Settings, get_settings
+from transitpulse.connection_risk_api import router as connection_risk_router
 from transitpulse.db import DatabaseProbe
 from transitpulse.events import EventBroker
 from transitpulse.health import Probe, router
@@ -83,6 +84,7 @@ def create_app(
         else None
     )
     app.state.request_windows = {}
+    app.state.transfer_risk_cache = {}
     app.state.api_latencies_ms = []
     app.state.sse_connections = 0
     app.state.sse_lock = asyncio.Lock()
@@ -169,6 +171,7 @@ def create_app(
 
     app.include_router(router)
     app.include_router(analytics_router)
+    app.include_router(connection_risk_router)
     app.include_router(schedule_router)
     app.include_router(live_router)
     return app
