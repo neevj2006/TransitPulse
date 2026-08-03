@@ -24,14 +24,13 @@ class Metrics:
             return ""
 
         def quote(value: str) -> str:
-            return value.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34)).replace(
-                chr(10), chr(92) + "n"
+            return (
+                value.replace(chr(92), chr(92) * 2)
+                .replace(chr(34), chr(92) + chr(34))
+                .replace(chr(10), chr(92) + "n")
             )
 
-        escaped = (
-            f'{key}="{quote(value)}"'
-            for key, value in labels
-        )
+        escaped = (f'{key}="{quote(value)}"' for key, value in labels)
         return "{" + ",".join(escaped) + "}"
 
     def increment(self, name: str, labels: dict[str, str] | None = None) -> None:
