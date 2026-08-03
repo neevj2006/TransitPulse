@@ -6,6 +6,7 @@ import {
   Menu,
   Search,
   ShieldAlert,
+  Timer,
 } from "lucide-react";
 import { ThemeSelect } from "@/components/theme-select";
 
@@ -14,6 +15,7 @@ const riderLinks = [
   { href: "/map", label: "Map", icon: Map },
   { href: "/alerts", label: "Alerts", icon: ShieldAlert },
   { href: "/reliability", label: "Reliability", icon: BarChart3 },
+  { href: "/transfer-risk", label: "Transfer", icon: Timer },
 ];
 const operatorLinks = [
   { href: "/operator", label: "Overview", icon: Activity },
