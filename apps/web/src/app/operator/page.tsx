@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { StatePanel } from "@/components/trust";
+import { OperatorDashboard } from "@/components/operator-dashboard";
 export default function OperatorPage() {
   return (
     <AppShell operator>
@@ -12,10 +12,7 @@ export default function OperatorPage() {
         </p>
       </header>
       <div className="mt-6">
-        <StatePanel kind="unknown" title="Health data unavailable">
-          Feed health and performance metrics will be explicitly labeled with
-          source and observation time.
-        </StatePanel>
+        <OperatorDashboard view="overview" />
       </div>
     </AppShell>
   );
