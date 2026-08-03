@@ -56,7 +56,7 @@ export function AppShell({
           </Link>
           <nav
             aria-label={operator ? "Operator navigation" : "Rider navigation"}
-            className="hidden items-center gap-1 md:flex"
+            className="hidden items-center gap-1 lg:flex"
           >
             {links.map(({ href, label }) => (
               <Link
@@ -85,7 +85,7 @@ export function AppShell({
       <main id="main-content" className="page-container">
         {children}
       </main>
-      <footer className="text-muted mx-auto max-w-7xl border-t px-4 py-6 pb-24 text-sm sm:px-6 md:pb-6 lg:px-8">
+      <footer className="text-muted mx-auto max-w-7xl border-t px-4 py-6 pb-24 text-sm sm:px-6 lg:px-8 lg:pb-6">
         Transit data provided by MassDOT/MBTA. TransitPulse is an independent
         project and is not affiliated with or endorsed by MBTA.{" "}
         <span className="mt-2 inline-flex flex-wrap gap-x-3 gap-y-2 sm:mt-0 sm:ml-2">
@@ -105,7 +105,7 @@ export function AppShell({
       </footer>
       <nav
         aria-label="Mobile navigation"
-        className="bg-surface fixed inset-x-0 bottom-0 z-30 flex justify-around border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="bg-surface fixed inset-x-0 bottom-0 z-30 flex justify-around border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         {links.map(({ href, label, icon: Icon }) => (
           <Link
