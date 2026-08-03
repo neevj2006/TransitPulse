@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from transitpulse.analytics_api import router as analytics_router
 from transitpulse.cache import RedisProbe, RedisStateStore
 from transitpulse.config import Settings, get_settings
 from transitpulse.db import DatabaseProbe
@@ -167,6 +168,7 @@ def create_app(
     _ = request_context
 
     app.include_router(router)
+    app.include_router(analytics_router)
     app.include_router(schedule_router)
     app.include_router(live_router)
     return app

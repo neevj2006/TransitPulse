@@ -1,6 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { AccessibleLineChart } from "@/components/accessible-chart";
-import { StatePanel } from "@/components/trust";
+import { ReliabilityDashboard } from "@/components/reliability-dashboard";
 export default function ReliabilityPage() {
   return (
     <AppShell>
@@ -14,17 +13,7 @@ export default function ReliabilityPage() {
           presented.
         </p>
       </header>
-      <div className="mt-6 space-y-6">
-        <AccessibleLineChart
-          title="Delay trend"
-          takeaway="A chart will show only retained observations, never an unsupported estimate."
-          data={[]}
-        />
-        <StatePanel kind="empty" title="Not enough data yet">
-          Historical reliability appears after sufficient observations are
-          retained and validated.
-        </StatePanel>
-      </div>
+      <ReliabilityDashboard />
     </AppShell>
   );
 }
