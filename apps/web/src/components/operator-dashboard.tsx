@@ -26,6 +26,13 @@ const schema = z.object({
     cache_telemetry: z
       .object({ key_count: z.number(), memory_bytes: z.number() })
       .nullable(),
+    quality_events: z.array(
+      z.object({
+        signal: z.string(),
+        event_count: z.number(),
+        last_observed_at: z.string(),
+      }),
+    ),
   }),
 });
 const shown = (value?: string | null) =>
@@ -137,6 +144,27 @@ export function OperatorDashboard({
             ))}
           </tbody>
         </table>
+      </section>
+      <section className="card">
+        <h2 className="text-xl font-semibold">Observed quality signals</h2>
+        <p className="text-muted mt-1 text-sm">
+          These are TransitPulse diagnostics, not confirmed agency incidents.
+        </p>
+        <ul className="mt-3 space-y-2 text-sm">
+          {meta.quality_events.length ? (
+            meta.quality_events.map((event) => (
+              <li key={event.signal}>
+                {event.signal.replaceAll("_", " ")}: {event.event_count} · last
+                observed {shown(event.last_observed_at)}
+              </li>
+            ))
+          ) : (
+            <li>
+              No retained frozen-vehicle, impossible-jump, or feed-gap signals
+              in the last 24 hours.
+            </li>
+          )}
+        </ul>
       </section>
     </div>
   );
