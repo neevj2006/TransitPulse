@@ -1,0 +1,4 @@
+# Run once daily at 04:15 local server time after the overnight service day.
+# Replace <project-directory> with the deployment checkout path and set
+# TP_DATABASE_URL in the scheduler's environment or service configuration.
+15 4 * * * cd <project-directory>/services/backend && uv run transitpulse-aggregate-reliability
