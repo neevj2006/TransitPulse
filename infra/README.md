@@ -45,3 +45,13 @@ you intentionally want to remove local database and cache data.
 The optional raw-snapshot path defaults to `data/raw`. Its contents are ignored
 by Git; only the directory marker is public. Future ingestion commands may
 override the path through `TP_RAW_SNAPSHOT_PATH`.
+
+## Reliability aggregation
+
+Run `uv run transitpulse-aggregate-reliability` after applying migrations. It
+atomically replaces the selected metric version from retained trip-update
+evidence and retains a safe job audit record. The checked-in
+`infra/reliability-aggregation.cron` is a zero-cost daily scheduler template;
+install it only after replacing its placeholder project path and supplying the
+database URL through the scheduler environment. Re-run the command after a
+metric-definition version change to rebuild that version without mixing results.
