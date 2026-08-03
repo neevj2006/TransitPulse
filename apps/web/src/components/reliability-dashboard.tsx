@@ -79,6 +79,7 @@ export function ReliabilityDashboard() {
   const onTime =
     rows.find((row) => row.on_time_percentage !== null)?.on_time_percentage ??
     null;
+  const dates = rows.map((row) => row.service_date).sort();
   return (
     <div className="mt-6 space-y-6">
       <fieldset className="card flex flex-wrap gap-4">
@@ -198,6 +199,9 @@ export function ReliabilityDashboard() {
           need at least {query.data.meta.minimum_sample_size} samples and{" "}
           {Math.round(query.data.meta.minimum_coverage * 100)}% coverage. These
           are observed predictions, not confirmed cancellations.
+        </p>
+        <p className="text-muted mt-2 text-sm">
+          Collection date range: {dates[0]} to {dates.at(-1)}.
         </p>
       </section>
     </div>
