@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TransitMap } from "@/components/transit-map";
+import { DeferredTransitMap } from "@/components/deferred-transit-map";
 
 const stops = [
   "Alewife",
@@ -48,7 +48,7 @@ export default function SchedulePage() {
         </p>
       </section>
       <section className="grid gap-6 lg:grid-cols-2">
-        <TransitMap routeName="Red Line" />
+        <DeferredTransitMap routeName="Red Line" />
         <section id="stop-list" className="bg-surface rounded-xl border p-5">
           <h2 className="text-xl font-semibold">Red Line stop list</h2>
           <ol className="mt-4 divide-y">
