@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
@@ -19,6 +19,12 @@ export const metadata: Metadata = {
     template: "%s · TransitPulse",
   },
   description: "A trustworthy foundation for public-transit data.",
+  manifest: "/manifest.webmanifest",
+  applicationName: "TransitPulse",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1859C9",
 };
 
 export default function RootLayout({

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TransitMap } from "@/components/transit-map";
+import { DeferredTransitMap } from "@/components/deferred-transit-map";
 import { VehicleList } from "@/components/vehicle-list";
 import { LoadingSkeleton, StatePanel } from "@/components/trust";
 import { routeStops, routeVehicles } from "@/lib/rider-data";
@@ -57,7 +57,7 @@ export function RouteDetail({ routeId }: { routeId: string }) {
         </fieldset>
       ) : null}
       <div className="grid gap-6 lg:grid-cols-2">
-        <TransitMap routeName={routeId} />
+        <DeferredTransitMap routeName={routeId} />
         <section className="card" id="stop-list">
           <h2 className="text-xl font-semibold">
             Stops{routeData.headsign ? ` toward ${routeData.headsign}` : ""}

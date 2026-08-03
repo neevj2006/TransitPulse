@@ -9,6 +9,7 @@ import {
   Timer,
 } from "lucide-react";
 import { ThemeSelect } from "@/components/theme-select";
+import { NetworkStatusStrip } from "@/components/network-status-strip";
 
 const riderLinks = [
   { href: "/", label: "Home", icon: Search },
@@ -82,6 +83,7 @@ export function AppShell({
           </div>
         </div>
       </header>
+      <NetworkStatusStrip />
       <main id="main-content" className="page-container">
         {children}
       </main>

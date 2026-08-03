@@ -5,9 +5,9 @@ import type { Feature, Point } from "geojson";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { publicEnv } from "@/lib/env";
 import { systemVehicles, type RiderVehicle } from "@/lib/rider-data";
-import { TransitMap } from "@/components/transit-map";
 import { VehicleList } from "@/components/vehicle-list";
 import { LoadingSkeleton, StatePanel } from "@/components/trust";
+import { DeferredTransitMap } from "@/components/deferred-transit-map";
 
 export function LiveSystemMap() {
   const [route, setRoute] = useState("");
@@ -69,7 +69,7 @@ export function LiveSystemMap() {
           </select>
         </label>
       </section>
-      <TransitMap routeName="MBTA network" vehicles={points} />
+      <DeferredTransitMap routeName="MBTA network" vehicles={points} />
       <VehicleList vehicles={values.map(toVehicle)} />
     </div>
   );
