@@ -95,7 +95,10 @@ export function RouteDiagnostics() {
         These measures are intentionally unavailable until observations can be
         matched to complete scheduled service. TransitPulse will label them as
         uncertain inferences—not confirmed missed trips—when that evidence
-        exists.
+        exists.{" "}
+        <a className="text-brand underline" href="/operator/feeds">
+          Review source-health context.
+        </a>
       </StatePanel>
     </div>
   );
