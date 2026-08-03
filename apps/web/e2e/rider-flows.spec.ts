@@ -93,7 +93,7 @@ async function mockRiderApi(page: import("@playwright/test").Page) {
                           },
                         },
                       ]
-      : path.endsWith("/live/alerts")
+                    : path.endsWith("/live/alerts")
                       ? [
                           {
                             alert_id: "alert-1",
@@ -119,9 +119,11 @@ async function mockRiderApi(page: import("@playwright/test").Page) {
                             source_first_at: "2026-07-01T00:00:00Z",
                             source_last_at: "2026-08-01T00:00:00Z",
                             history_stale: false,
-                            assumptions: ["Historical delays are paired independently."],
+                            assumptions: [
+                              "Historical delays are paired independently.",
+                            ],
                           }
-                      : [];
+                        : [];
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({ schema_version: "1.0.0", data, meta }),
@@ -169,7 +171,9 @@ test("riders can search, inspect live vehicles, and filter agency alerts", async
   expect(errors).toEqual([]);
 });
 
-test("riders can calculate an evidence-labelled transfer risk", async ({ page }) => {
+test("riders can calculate an evidence-labelled transfer risk", async ({
+  page,
+}) => {
   const errors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -177,9 +181,13 @@ test("riders can calculate an evidence-labelled transfer risk", async ({ page })
   await mockRiderApi(page);
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/transfer-risk");
-  await page.getByLabel("Planned connecting departure").fill("2026-08-05T10:10");
+  await page
+    .getByLabel("Planned connecting departure")
+    .fill("2026-08-05T10:10");
   await page.getByRole("button", { name: "Calculate transfer risk" }).click();
-  await expect(page.getByRole("heading", { name: /Medium risk/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Medium risk/ }),
+  ).toBeVisible();
   await expect(page.getByText(/not a guarantee/)).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(errors).toEqual([]);

@@ -111,7 +111,7 @@ export function AppShell({
           <Link
             href={href}
             key={href}
-            className="text-muted flex min-h-16 min-w-14 flex-col items-center justify-center gap-1 px-2 text-xs font-medium"
+            className="text-muted flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-xs font-medium"
           >
             <Icon aria-hidden="true" className="size-5" />
             {label}
