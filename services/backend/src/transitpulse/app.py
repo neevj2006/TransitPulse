@@ -22,6 +22,7 @@ from transitpulse.events import EventBroker
 from transitpulse.health import Probe, router
 from transitpulse.live_api import router as live_router
 from transitpulse.logging import configure_logging
+from transitpulse.metrics import Metrics
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.api import router as schedule_router
 from transitpulse.schedule.repository import load_active_schedule
@@ -88,6 +89,7 @@ def create_app(
     app.state.api_latencies_ms = []
     app.state.sse_connections = 0
     app.state.sse_lock = asyncio.Lock()
+    app.state.metrics = Metrics()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(application_settings.allowed_origins),
@@ -147,6 +149,12 @@ def create_app(
         try:
             response = await call_next(request)
         except Exception:
+            logger.exception(
+                "request_failed",
+                request_id=request_id,
+                method=request.method,
+                path=request.url.path,
+            )
             response = JSONResponse(
                 {
                     "code": "INTERNAL_ERROR",
@@ -161,6 +169,30 @@ def create_app(
                 *request.app.state.api_latencies_ms[-999:],
                 elapsed_ms,
             ]
+        elapsed_seconds = monotonic() - now
+        route = request.scope.get("route")
+        metric_path = getattr(route, "path", "unmatched")
+        request.app.state.metrics.increment(
+            "transitpulse_http_requests_total",
+            {
+                "method": request.method,
+                "path": metric_path,
+                "status": str(response.status_code),
+            },
+        )
+        request.app.state.metrics.observe(
+            "transitpulse_http_request_duration_seconds",
+            elapsed_seconds,
+            {"method": request.method, "path": metric_path},
+        )
+        logger.info(
+            "request_completed",
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(elapsed_seconds * 1000, 2),
+        )
         response.headers["X-Request-ID"] = request_id
         response.headers["Cache-Control"] = (
             "no-store" if request.url.path.startswith("/api/v1/live") else "public, max-age=60"
@@ -174,4 +206,10 @@ def create_app(
     app.include_router(connection_risk_router)
     app.include_router(schedule_router)
     app.include_router(live_router)
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics(request: Request) -> Response:
+        return Response(request.app.state.metrics.render(), media_type="text/plain; version=0.0.4")
+
+    _ = metrics
     return app

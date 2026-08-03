@@ -40,6 +40,14 @@ async def test_liveness(client: AsyncClient) -> None:
     }
 
 
+async def test_metrics_exposes_request_measurements(client: AsyncClient) -> None:
+    await client.get("/health/live")
+    response = await client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "transitpulse_http_requests_total" in response.text
+
+
 async def test_cors_is_narrow_by_default(client: AsyncClient) -> None:
     response = await client.options(
         "/api/v1/live/health",
