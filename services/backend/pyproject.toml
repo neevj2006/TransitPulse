@@ -23,6 +23,7 @@ transitpulse-api = "transitpulse.commands:run_api"
 transitpulse-migrate = "transitpulse.commands:run_migrations"
 transitpulse-worker = "transitpulse.commands:run_worker"
 transitpulse-import-gtfs = "transitpulse.commands:run_static_import"
+transitpulse-aggregate-reliability = "transitpulse.commands:run_reliability_aggregation"
 
 [dependency-groups]
 dev = [
