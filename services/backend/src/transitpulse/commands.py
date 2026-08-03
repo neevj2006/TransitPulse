@@ -8,6 +8,7 @@ from alembic.config import main as alembic_main
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from transitpulse.aggregation import ReliabilityAggregationStore
 from transitpulse.cache import RedisStateStore
 from transitpulse.config import Settings, get_settings
 from transitpulse.history import RealtimeHistoryStore
@@ -111,3 +112,19 @@ async def import_static_feed() -> str:
 
 def run_static_import() -> None:
     asyncio.run(import_static_feed())
+
+
+def run_reliability_aggregation() -> None:
+    settings = get_settings()
+    if not settings.database_url:
+        raise RuntimeError("TP_DATABASE_URL is required to aggregate reliability metrics")
+    engine = create_async_engine(settings.database_url)
+
+    async def aggregate() -> None:
+        try:
+            job_id = await ReliabilityAggregationStore(engine).aggregate()
+            structlog.get_logger().info("reliability_aggregation_succeeded", job_id=job_id)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(aggregate())
