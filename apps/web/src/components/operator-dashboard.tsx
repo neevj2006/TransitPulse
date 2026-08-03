@@ -24,7 +24,11 @@ const schema = z.object({
       p95_ms: z.number().nullable(),
     }),
     cache_telemetry: z
-      .object({ key_count: z.number(), memory_bytes: z.number() })
+      .object({
+        key_count: z.number(),
+        memory_bytes: z.number(),
+        hit_rate_percent: z.number().nullable(),
+      })
       .nullable(),
     quality_events: z.array(
       z.object({
@@ -113,6 +117,15 @@ export function OperatorDashboard({
             meta.cache_telemetry
               ? `${Math.round(meta.cache_telemetry.memory_bytes / 1024)} KB`
               : "Unavailable"
+          }
+        />
+        <Metric
+          label="Cache hit rate"
+          value={
+            meta.cache_telemetry?.hit_rate_percent === null ||
+            !meta.cache_telemetry
+              ? "No samples"
+              : `${meta.cache_telemetry.hit_rate_percent}%`
           }
         />
       </section>
