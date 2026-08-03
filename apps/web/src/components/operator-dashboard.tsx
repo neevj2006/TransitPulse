@@ -33,6 +33,13 @@ const schema = z.object({
         last_observed_at: z.string(),
       }),
     ),
+    recent_polls: z.array(
+      z.object({
+        source_id: z.string(),
+        outcome: z.string(),
+        completed_at: z.string(),
+      }),
+    ),
   }),
 });
 const shown = (value?: string | null) =>
@@ -164,6 +171,25 @@ export function OperatorDashboard({
               in the last 24 hours.
             </li>
           )}
+        </ul>
+      </section>
+      <section className="card">
+        <h2 className="text-xl font-semibold">Recent feed outages</h2>
+        <p className="text-muted mt-1 text-sm">
+          Poll failures are evidence of a feed retrieval problem, not a
+          rider-service claim.
+        </p>
+        <ul className="mt-3 space-y-2 text-sm">
+          {meta.recent_polls
+            .filter(
+              (poll) => !["SUCCESS", "NOT_MODIFIED"].includes(poll.outcome),
+            )
+            .slice(0, 10)
+            .map((poll, index) => (
+              <li key={`${poll.source_id}-${index}`}>
+                {poll.source_id}: {poll.outcome} at {shown(poll.completed_at)}
+              </li>
+            )) || <li>No retained failures in this sample.</li>}
         </ul>
       </section>
     </div>
