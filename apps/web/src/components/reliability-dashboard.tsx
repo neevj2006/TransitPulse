@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { z } from "zod";
 import { apiRequest } from "@/lib/api";
 import { AccessibleLineChart } from "@/components/accessible-chart";
@@ -30,9 +31,25 @@ const duration = (value: number | null) =>
   value === null ? "—" : `${Math.round(value / 60)} min`;
 
 export function ReliabilityDashboard() {
+  const [routeId, setRouteId] = useState("");
+  const [weekday, setWeekday] = useState("");
+  const [directionId, setDirectionId] = useState("");
+  const [stopId, setStopId] = useState("");
+  const [hour, setHour] = useState("");
+  const queryString = new URLSearchParams({
+    ...(routeId ? { route_id: routeId } : {}),
+    ...(weekday ? { weekday } : {}),
+    ...(directionId ? { direction_id: directionId } : {}),
+    ...(stopId ? { stop_id: stopId } : {}),
+    ...(hour ? { hour } : {}),
+  }).toString();
   const query = useQuery({
-    queryKey: ["reliability"],
-    queryFn: () => apiRequest("/api/v1/reliability", responseSchema),
+    queryKey: ["reliability", queryString],
+    queryFn: () =>
+      apiRequest(
+        `/api/v1/reliability${queryString ? `?${queryString}` : ""}`,
+        responseSchema,
+      ),
   });
   if (query.isPending)
     return <LoadingSkeleton label="Loading historical reliability" />;
@@ -64,6 +81,71 @@ export function ReliabilityDashboard() {
     null;
   return (
     <div className="mt-6 space-y-6">
+      <fieldset className="card flex flex-wrap gap-4">
+        <legend className="px-1 font-semibold">Filters</legend>
+        <label className="text-sm">
+          Route{" "}
+          <input
+            className="ml-2 rounded-md border p-2"
+            value={routeId}
+            onChange={(event) => setRouteId(event.target.value)}
+            placeholder="e.g. Red"
+          />
+        </label>
+        <label className="text-sm">
+          Direction{" "}
+          <select
+            className="ml-2 rounded-md border p-2"
+            value={directionId}
+            onChange={(event) => setDirectionId(event.target.value)}
+          >
+            <option value="">All</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          Stop{" "}
+          <input
+            className="ml-2 rounded-md border p-2"
+            value={stopId}
+            onChange={(event) => setStopId(event.target.value)}
+            placeholder="Stop ID"
+          />
+        </label>
+        <label className="text-sm">
+          Hour{" "}
+          <select
+            className="ml-2 rounded-md border p-2"
+            value={hour}
+            onChange={(event) => setHour(event.target.value)}
+          >
+            <option value="">All</option>
+            {Array.from({ length: 24 }, (_, value) => (
+              <option key={value} value={value}>
+                {value}:00
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          Weekday{" "}
+          <select
+            className="ml-2 rounded-md border p-2"
+            value={weekday}
+            onChange={(event) => setWeekday(event.target.value)}
+          >
+            <option value="">All</option>
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+              (day, index) => (
+                <option key={day} value={index + 1}>
+                  {day}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+      </fieldset>
       <section
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         aria-label="Reliability summary"
@@ -90,6 +172,25 @@ export function ReliabilityDashboard() {
         }))}
         coverage={`${Math.round(coverage * 100)}%`}
       />
+      <section className="card">
+        <h2 className="text-xl font-semibold">Weekday and hour coverage</h2>
+        <div className="mt-3 grid grid-cols-6 gap-2 sm:grid-cols-12">
+          {rows.map((row) => (
+            <div
+              className="bg-surface-muted rounded-md p-2 text-xs"
+              key={`${row.service_date}-${row.hour}`}
+            >
+              <strong>{row.hour}:00</strong>
+              <br />
+              {Math.round(row.coverage * 100)}% · {row.sample_size} samples
+            </div>
+          ))}
+        </div>
+        <p className="text-muted mt-3 text-sm">
+          Each cell is an observed-hour table alternative; insufficient samples
+          remain visible rather than inferred.
+        </p>
+      </section>
       <section className="card">
         <h2 className="text-xl font-semibold">Data context</h2>
         <p className="text-muted mt-2">

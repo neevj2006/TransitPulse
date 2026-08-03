@@ -61,6 +61,7 @@ async def health(request: Request) -> dict[str, object]:
         ]
     history: list[dict[str, object]] = []
     diagnostics: list[dict[str, object]] = []
+    quality_events: list[dict[str, object]] = []
     engine = getattr(request.app.state, "schedule_engine", None)
     if engine:
         async with engine.connect() as connection:
@@ -83,6 +84,14 @@ async def health(request: Request) -> dict[str, object]:
                 )
             )
             diagnostics = [dict(row) for row in summary.mappings()]
+            events = await connection.execute(
+                text(
+                    "SELECT signal, count(*) AS event_count, max(observed_at) AS last_observed_at "
+                    "FROM realtime_quality_events WHERE observed_at >= now() - interval '24 hours' "
+                    "GROUP BY signal ORDER BY event_count DESC"
+                )
+            )
+            quality_events = [dict(row) for row in events.mappings()]
     cache_telemetry = await cache.telemetry() if cache else None
     for item in data:
         entity_diagnostics = cast(dict[str, int], item.get("diagnostics", {}))
@@ -106,6 +115,7 @@ async def health(request: Request) -> dict[str, object]:
             "generated_at": now,
             "recent_polls": history,
             "diagnostics": diagnostics,
+            "quality_events": quality_events,
             "cache_telemetry": cache_telemetry,
             "api_latency": latency_summary(request.app.state.api_latencies_ms),
         },
