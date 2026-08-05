@@ -274,6 +274,20 @@ async def run_poller(
     async with httpx.AsyncClient(follow_redirects=True) as client:
         while not stop.is_set():
             result, payload = await poller.poll(client)
+            logger.info(
+                "feed_poll_completed",
+                source_id=result.source_id,
+                outcome=result.outcome,
+                status_code=result.status_code,
+                bytes_received=result.bytes_received,
+                error_code=result.error_code,
+                duration_ms=round(
+                    (result.completed_at - result.started_at).total_seconds() * 1000, 2
+                ),
+                feed_age_seconds=(datetime.now(UTC) - poller.health.last_success_at).total_seconds()
+                if poller.health.last_success_at
+                else None,
+            )
             if projector.cache:
                 try:
                     now = datetime.now(UTC)

@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
     ports:
-      - "${POSTGRES_PORT:-55432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgis-data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
     command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1"]
     ports:
-      - "${VALKEY_PORT:-56379}:6379"
+      - "127.0.0.1:${VALKEY_PORT:-56379}:6379"
     volumes:
       - valkey-data:/data
     healthcheck:
