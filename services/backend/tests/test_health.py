@@ -48,6 +48,15 @@ async def test_metrics_exposes_request_measurements(client: AsyncClient) -> None
     assert "transitpulse_http_requests_total" in response.text
 
 
+async def test_rate_limit_client_state_is_bounded(client: AsyncClient) -> None:
+    client._transport.app.state.request_windows = {str(index): [] for index in range(10_000)}  # type: ignore[attr-defined]
+
+    response = await client.get("/health/live")
+
+    assert response.status_code == 200
+    assert len(client._transport.app.state.request_windows) == 10_000  # type: ignore[attr-defined]
+
+
 async def test_cors_is_narrow_by_default(client: AsyncClient) -> None:
     response = await client.options(
         "/api/v1/live/health",

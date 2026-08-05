@@ -146,6 +146,8 @@ def create_app(
                 headers={"Retry-After": "60", "X-Request-ID": request_id},
             )
         request.app.state.request_windows[client] = [*window, now]
+        while len(request.app.state.request_windows) > 10_000:
+            request.app.state.request_windows.pop(next(iter(request.app.state.request_windows)))
         try:
             response = await call_next(request)
         except Exception:
