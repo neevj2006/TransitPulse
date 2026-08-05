@@ -1,5 +1,6 @@
 import asyncio
 import json
+import signal
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -28,6 +29,25 @@ from transitpulse.reconciliation import reconcile_trip_update, reconcile_vehicle
 from transitpulse.schedule.models import Schedule
 
 logger = structlog.get_logger()
+
+
+def register_shutdown_signal_handlers(stop: asyncio.Event) -> Callable[[], None]:
+    """Request a cooperative worker shutdown when the container is stopped."""
+
+    loop = asyncio.get_running_loop()
+    registered: list[signal.Signals] = []
+    for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(shutdown_signal, stop.set)
+        except (NotImplementedError, RuntimeError):
+            continue
+        registered.append(shutdown_signal)
+
+    def remove_handlers() -> None:
+        for shutdown_signal in registered:
+            loop.remove_signal_handler(shutdown_signal)
+
+    return remove_handlers
 
 
 class RealtimeProjector:
@@ -411,6 +431,7 @@ async def run_worker(
     previous_schedule: Schedule | None = None,
 ) -> None:
     stop = asyncio.Event()
+    remove_shutdown_handlers = register_shutdown_signal_handlers(stop)
     pollers = build_pollers(raw_path, vehicle_url, trip_url, alert_url)
     projector = RealtimeProjector(
         CurrentState(), EventBroker(), cache, history, schedule, previous_schedule
@@ -424,6 +445,7 @@ async def run_worker(
             *([prune_history(history, detailed_history_retention_days, stop)] if history else []),
         )
     finally:
+        remove_shutdown_handlers()
         if cache:
             await cache.close()
         if history:
