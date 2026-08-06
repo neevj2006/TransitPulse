@@ -46,6 +46,36 @@ The optional raw-snapshot path defaults to `data/raw`. Its contents are ignored
 by Git; only the directory marker is public. Future ingestion commands may
 override the path through `TP_RAW_SNAPSHOT_PATH`.
 
+## Self-hosted production stack
+
+`compose.production.yaml` runs the API, worker, PostgreSQL/PostGIS, Valkey,
+frontend, and Caddy on one host. PostgreSQL and Valkey are private to the Docker
+network; Caddy is the only service that publishes ports and obtains HTTPS
+certificates. The containers run as non-root users where their upstream images
+support it.
+
+1. Point `PUBLIC_HOSTNAME` at the host and allow inbound TCP 80 and 443.
+2. Copy `infra/.env.example` to a host-local `infra/.env`, replacing the
+   placeholder database password and production host values.
+3. Build and start the stack:
+
+   ```sh
+   docker compose --env-file infra/.env -f infra/compose.production.yaml up --build -d --wait
+   ```
+
+4. Inspect readiness through the public hostname and keep the generated Caddy
+   volumes and database volumes in the documented backup scope.
+
+The migration container exits after a successful upgrade. Compose will not start
+the API or worker if migration fails. Stop the stack with `docker compose
+--env-file infra/.env -f infra/compose.production.yaml down`; do not append
+`--volumes` unless intentionally deleting persistent production data.
+
+For a host-only smoke test, set `PUBLIC_HOSTNAME=localhost`,
+`HTTP_PORT=8080`, and `HTTPS_PORT=8443` before starting the stack. Caddy uses a
+locally trusted development certificate in that configuration; use `curl -k` for
+the short-lived smoke test only. Do not use those values for a public deployment.
+
 ## Reliability aggregation
 
 Run `uv run transitpulse-aggregate-reliability` after applying migrations. It

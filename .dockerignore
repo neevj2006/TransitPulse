@@ -1,0 +1,17 @@
+.git
+.github
+.next
+node_modules
+apps/web/.next
+apps/web/node_modules
+services/backend/.venv
+services/backend/.pytest_cache
+services/backend/.ruff_cache
+services/backend/__pycache__
+**/__pycache__
+data/raw
+playwright-report
+test-results
+.env
+.env.*
+!.env.example

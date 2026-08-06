@@ -1,0 +1,146 @@
+name: transitpulse
+
+services:
+  postgis:
+    image: postgis/postgis:17-3.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [internal]
+
+  valkey:
+    image: valkey/valkey:8.1.3-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks: [internal]
+
+  migrate:
+    build:
+      context: ../services/backend
+    image: transitpulse-backend:local
+    command: ["transitpulse-migrate"]
+    environment: &backend-environment
+      TP_ALLOWED_ORIGINS: ${TP_ALLOWED_ORIGINS}
+      TP_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB}
+      TP_ENVIRONMENT: production
+      TP_RAW_SNAPSHOT_PATH: /data/raw
+      TP_REDIS_URL: redis://valkey:6379/0
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks: [internal]
+    restart: "no"
+
+  backend:
+    image: transitpulse-backend:local
+    build:
+      context: ../services/backend
+    restart: unless-stopped
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgis:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks: [internal, edge]
+    stop_grace_period: 30s
+
+  worker:
+    image: transitpulse-backend:local
+    build:
+      context: ../services/backend
+    command: ["transitpulse-worker"]
+    restart: unless-stopped
+    environment: *backend-environment
+    volumes:
+      - raw-snapshots:/data/raw
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgis:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks: [internal]
+    stop_grace_period: 30s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_APP_ENV: production
+        NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-0.1.0}
+        NEXT_PUBLIC_MAP_STYLE_DARK_URL: ${NEXT_PUBLIC_MAP_STYLE_DARK_URL}
+        NEXT_PUBLIC_MAP_STYLE_LIGHT_URL: ${NEXT_PUBLIC_MAP_STYLE_LIGHT_URL}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1) })"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks: [edge]
+    stop_grace_period: 15s
+
+  caddy:
+    image: caddy:2.9.1-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    stop_grace_period: 30s
+
+networks:
+  edge:
+  internal:
+    internal: true
+
+volumes:
+  caddy-config:
+  caddy-data:
+  postgis-data:
+  raw-snapshots:
+  valkey-data:
