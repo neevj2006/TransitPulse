@@ -1,3 +1,4 @@
+import { isDemo } from "@/lib/env";
 import {
   CalendarClock,
   CircleAlert,
@@ -64,6 +65,7 @@ export function SourceBadge({ kind, age }: { kind: SourceKind; age?: string }) {
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${config.className}`}
     >
       <Icon aria-hidden="true" className="size-4" />
+      {isDemo ? "Demo · " : ""}
       {config.label}
       {age ? ` · ${age}` : ""}
     </span>

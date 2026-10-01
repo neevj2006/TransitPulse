@@ -30,8 +30,16 @@ const formatMinutes = (seconds: number) => {
   return `${sign}${Math.abs(Math.round(seconds / 60))} min`;
 };
 
-const nowForInput = () =>
-  new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16);
+const nowForInput = () => {
+  const date = new Date(Date.now() + 60 * 60 * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+};
+const inputTimestamp = (value: string) => {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? new Date(time).toISOString() : "";
+};
 
 export function TransferRiskCalculator() {
   const [arrivingRoute, setArrivingRoute] = useState("Red");
@@ -55,8 +63,8 @@ export function TransferRiskCalculator() {
     arriving_stop_id: arrivingStop,
     connecting_route_id: connectingRoute,
     connecting_stop_id: connectingStop,
-    planned_arrival: new Date(arrival).toISOString(),
-    planned_departure: departure ? new Date(departure).toISOString() : "",
+    planned_arrival: inputTimestamp(arrival),
+    planned_departure: inputTimestamp(departure),
     ...(walking ? { walking_seconds: String(Number(walking) * 60) } : {}),
   });
   const query = useQuery({
@@ -158,7 +166,7 @@ export function TransferRiskCalculator() {
           </button>
         </div>
       </form>
-      {query.isPending ? (
+      {query.isFetching ? (
         <LoadingSkeleton label="Calculating transfer risk" />
       ) : null}
       {query.isError ? (

@@ -25,6 +25,22 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("TransferRiskCalculator", () => {
+  it("allows clearing the date without crashing or showing a pending calculation", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TransferRiskCalculator />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Planned arrival"), {
+      target: { value: "" },
+    });
+    expect(
+      screen.getByRole("button", { name: "Calculate transfer risk" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByLabelText("Calculating transfer risk"),
+    ).not.toBeInTheDocument();
+  });
   it("shows a plainly labelled empirical risk result", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

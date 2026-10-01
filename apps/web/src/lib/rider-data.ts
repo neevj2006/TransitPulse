@@ -50,7 +50,7 @@ export const liveArrivalSchema = z.object({
       departure_time: z.string().nullable(),
     })
     .nullable(),
-  freshness,
+  freshness: freshness.default({ state: "UNKNOWN" }),
   scheduled_fallback: z
     .object({ gtfs_seconds: z.number().nullable() })
     .nullable(),

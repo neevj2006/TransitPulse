@@ -60,16 +60,10 @@ export function ReliabilityDashboard() {
       </StatePanel>
     );
   const rows = query.data.data;
-  if (!rows.length)
-    return (
-      <StatePanel kind="empty" title="Not enough data yet">
-        Historical reliability appears after sufficient observed trip updates
-        are retained.
-      </StatePanel>
-    );
   const samples = rows.reduce((total, row) => total + row.sample_size, 0);
-  const coverage =
-    rows.reduce((total, row) => total + row.coverage, 0) / rows.length;
+  const coverage = rows.length
+    ? rows.reduce((total, row) => total + row.coverage, 0) / rows.length
+    : 0;
   const median =
     rows.find((row) => row.median_delay_seconds !== null)
       ?.median_delay_seconds ?? null;
@@ -147,6 +141,11 @@ export function ReliabilityDashboard() {
           </select>
         </label>
       </fieldset>
+      {!rows.length ? (
+        <StatePanel kind="empty" title="No matching reliability evidence">
+          Clear or change the filters to see other retained observations.
+        </StatePanel>
+      ) : null}
       <section
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         aria-label="Reliability summary"
@@ -154,9 +153,12 @@ export function ReliabilityDashboard() {
         {[
           ["Observed samples", samples.toLocaleString()],
           ["Coverage", `${Math.round(coverage * 100)}%`],
-          ["Median delay", duration(median)],
-          ["P95 delay", duration(p95)],
-          ["On time", onTime === null ? "—" : `${Math.round(onTime * 100)}%`],
+          ["Latest bucket median delay", duration(median)],
+          ["Latest bucket P95 delay", duration(p95)],
+          [
+            "Latest bucket on time",
+            onTime === null ? "—" : `${Math.round(onTime * 100)}%`,
+          ],
         ].map(([label, value]) => (
           <article className="card" key={label}>
             <p className="text-muted text-sm">{label}</p>
@@ -168,7 +170,7 @@ export function ReliabilityDashboard() {
         title="Median delay by observed hour"
         takeaway="Historical agency predictions grouped by the hour TransitPulse received them."
         data={rows.map((row) => ({
-          label: `${row.service_date} ${row.hour}:00`,
+          label: `${row.route_id} ${row.service_date} ${row.hour}:00`,
           value: Math.round((row.median_delay_seconds ?? 0) / 60),
         }))}
         coverage={`${Math.round(coverage * 100)}%`}
@@ -176,10 +178,10 @@ export function ReliabilityDashboard() {
       <section className="card">
         <h2 className="text-xl font-semibold">Weekday and hour coverage</h2>
         <div className="mt-3 grid grid-cols-6 gap-2 sm:grid-cols-12">
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <div
               className="bg-surface-muted rounded-md p-2 text-xs"
-              key={`${row.service_date}-${row.hour}`}
+              key={`${row.route_id}-${row.service_date}-${row.hour}-${index}`}
             >
               <strong>{row.hour}:00</strong>
               <br />

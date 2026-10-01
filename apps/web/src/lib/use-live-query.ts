@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { connectLiveStream } from "@/lib/live-stream";
+import { isDemo } from "@/lib/env";
 
 export function useLiveQuery<T>({
   key,
@@ -13,10 +14,14 @@ export function useLiveQuery<T>({
   fetcher: () => Promise<T>;
   streamUrl?: string;
 }) {
-  const query = useQuery({ queryKey: key, queryFn: fetcher });
+  const query = useQuery({
+    queryKey: key,
+    queryFn: fetcher,
+    refetchInterval: isDemo ? 5000 : false,
+  });
   const client = useQueryClient();
   useEffect(() => {
-    if (!streamUrl) return;
+    if (!streamUrl || isDemo) return;
     return connectLiveStream({
       url: streamUrl,
       onEvent: () => client.invalidateQueries({ queryKey: key }),

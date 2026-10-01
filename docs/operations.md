@@ -19,6 +19,13 @@ breaker threshold, or when the 5xx rate rises above 1% for five minutes.
 
 ## Failure behaviour
 
+API metrics include cumulative SQL execution duration, database pool size and
+checked-out connections, and active SSE connections. SQL text and query parameters
+are not recorded. HTTP method labels use a fixed vocabulary to bound cardinality.
+Each client may hold three SSE connections within the global twenty-connection
+limit; excess requests receive 429. Proxy-aware client identity depends on the
+trusted Caddy address documented in deployment setup.
+
 Each source is independently polled. Three consecutive request failures open a
 bounded exponential-backoff circuit; source health becomes offline, and rider
 views preserve clearly-labelled scheduled fallback rather than presenting old data

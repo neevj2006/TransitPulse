@@ -10,6 +10,8 @@ export default defineConfig({
     },
   },
   test: {
+    include: ["src/**/*.test.{ts,tsx}"],
+    env: { NEXT_PUBLIC_DATA_MODE: "live" },
     environment: "jsdom",
     exclude: ["e2e/**", "node_modules/**"],
     setupFiles: ["./src/test/setup.ts"],

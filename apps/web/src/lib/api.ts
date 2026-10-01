@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { publicEnv } from "@/lib/env";
+import { publicEnv, isDemo } from "@/lib/env";
+import { demoQuery } from "@/lib/demo-clock";
 
 export class ApiError extends Error {
   constructor(
@@ -16,8 +17,11 @@ export async function apiRequest<T>(
   schema: z.ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
-  const base = publicEnv.NEXT_PUBLIC_API_BASE_URL ?? "";
-  const response = await fetch(`${base}${path}`, {
+  const base = isDemo ? "" : (publicEnv.NEXT_PUBLIC_API_BASE_URL ?? "");
+  const target = isDemo
+    ? `${path}${path.includes("?") ? "&" : "?"}${demoQuery()}`
+    : path;
+  const response = await fetch(`${base}${target}`, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
   });

@@ -47,12 +47,12 @@ export function StopArrivals({ stopId }: { stopId: string }) {
       scheduled: formatGtfsTime(value.scheduled.gtfs_seconds),
       prediction: predicted ? formatTimestamp(predicted) : undefined,
       freshness:
-        prediction?.freshness.state === "STALE"
+        prediction?.freshness?.state === "STALE"
           ? "stale"
-          : prediction
+          : predicted && prediction?.freshness?.state === "HEALTHY"
             ? "live"
             : undefined,
-      fallback: !prediction,
+      fallback: !predicted,
     };
   });
   return (

@@ -202,7 +202,12 @@ export function OperatorDashboard({
               <li key={`${poll.source_id}-${index}`}>
                 {poll.source_id}: {poll.outcome} at {shown(poll.completed_at)}
               </li>
-            )) || <li>No retained failures in this sample.</li>}
+            ))}
+          {!meta.recent_polls.some(
+            (poll) => !["SUCCESS", "NOT_MODIFIED"].includes(poll.outcome),
+          ) ? (
+            <li>No retained failures in this sample.</li>
+          ) : null}
         </ul>
       </section>
     </div>

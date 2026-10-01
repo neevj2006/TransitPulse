@@ -12,6 +12,12 @@ COPY apps/web/package.json apps/web/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_DATA_MODE=live
+ARG NEXT_PUBLIC_APP_ENV=production
+ARG NEXT_PUBLIC_APP_VERSION=0.1.0
+ARG NEXT_PUBLIC_MAP_STYLE_DARK_URL=https://tiles.openfreemap.org/styles/dark
+ARG NEXT_PUBLIC_MAP_STYLE_LIGHT_URL=https://tiles.openfreemap.org/styles/liberty
 COPY apps/web apps/web
 RUN pnpm --filter web build
 

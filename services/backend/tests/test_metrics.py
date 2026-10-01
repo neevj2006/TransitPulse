@@ -17,3 +17,14 @@ def test_prometheus_metrics_escape_label_values() -> None:
     metrics.increment("transitpulse_example_total", {"label": 'a"b\nc'})
 
     assert 'label="a\\"b\\nc"' in metrics.render()
+
+
+def test_duration_totals_do_not_reset_when_the_sample_window_rolls() -> None:
+    metrics = Metrics()
+    for _ in range(1005):
+        metrics.observe("duration", 1.0)
+    metrics.gauge("connections", 3)
+    metrics.gauge("connections", 1)
+    assert "duration_count 1005" in metrics.render()
+    assert "duration_sum 1005.000000" in metrics.render()
+    assert "connections 1" in metrics.render()

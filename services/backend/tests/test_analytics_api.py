@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from time import monotonic
 
 from httpx import ASGITransport, AsyncClient
 
@@ -60,6 +61,9 @@ async def test_transfer_risk_returns_safe_unavailable_problem_without_database()
 async def test_transfer_risk_uses_the_planned_journey_as_a_chronological_cutoff() -> None:
     app = create_app(Settings(environment="test", database_url=None, redis_url=None), probes=[])
     app.state.schedule_engine = _ChronologicalFixtureEngine()
+    app.state.transfer_risk_cache = {
+        ("old", index): (monotonic() + 3600, {"fixture": True}) for index in range(1000)
+    }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             "/api/v1/transfer-risk?arriving_route_id=Red&arriving_stop_id=Harvard"
@@ -68,3 +72,5 @@ async def test_transfer_risk_uses_the_planned_journey_as_a_chronological_cutoff(
         )
     assert response.status_code == 200
     assert response.json()["data"]["missed_transfer_probability"] == 0
+    assert len(app.state.transfer_risk_cache) == 1000
+    assert ("old", 0) not in app.state.transfer_risk_cache
