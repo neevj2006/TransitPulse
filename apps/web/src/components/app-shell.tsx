@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { ThemeSelect } from "@/components/theme-select";
 import { NetworkStatusStrip } from "@/components/network-status-strip";
+import { DemoBanner } from "@/components/demo-banner";
 
 const riderLinks = [
   { href: "/", label: "Home", icon: Search },
@@ -52,7 +53,9 @@ export function AppShell({
             </span>
             TransitPulse
             {operator ? (
-              <span className="text-muted text-sm font-medium">Operator</span>
+              <span className="text-muted hidden text-sm font-medium sm:inline">
+                Operator
+              </span>
             ) : null}
           </Link>
           <nav
@@ -84,6 +87,7 @@ export function AppShell({
         </div>
       </header>
       <NetworkStatusStrip />
+      <DemoBanner />
       <main id="main-content" className="page-container">
         {children}
       </main>
@@ -102,6 +106,12 @@ export function AppShell({
           </Link>
           <Link className="underline" href="/accessibility">
             Accessibility
+          </Link>
+          <Link className="underline" href="/about">
+            About
+          </Link>
+          <Link className="underline" href={operator ? "/" : "/operator"}>
+            {operator ? "Rider view" : "Operator"}
           </Link>
         </span>
       </footer>

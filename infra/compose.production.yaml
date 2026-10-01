@@ -54,7 +54,12 @@ services:
     build:
       context: ../services/backend
     restart: unless-stopped
-    environment: *backend-environment
+    environment:
+      TP_ALLOWED_ORIGINS: ${TP_ALLOWED_ORIGINS}
+      TP_API_DATABASE_URL: ${TP_API_DATABASE_URL:?Set a dedicated read-only API database URL}
+      FORWARDED_ALLOW_IPS: ${TRUSTED_PROXY_IP:-172.30.0.2}
+      TP_ENVIRONMENT: production
+      TP_REDIS_URL: redis://valkey:6379/0
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -63,7 +68,13 @@ services:
       valkey:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')",
+        ]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -87,7 +98,7 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
-    networks: [internal]
+    networks: [internal, edge]
     stop_grace_period: 30s
 
   frontend:
@@ -95,6 +106,7 @@ services:
       context: ..
       dockerfile: apps/web/Dockerfile
       args:
+        NEXT_PUBLIC_DATA_MODE: live
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
         NEXT_PUBLIC_APP_ENV: production
         NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-0.1.0}
@@ -104,7 +116,13 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1) })"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1) })",
+        ]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -130,11 +148,16 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    networks: [edge]
+    networks:
+      edge:
+        ipv4_address: ${TRUSTED_PROXY_IP:-172.30.0.2}
     stop_grace_period: 30s
 
 networks:
   edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-172.30.0.0/24}
   internal:
     internal: true
 

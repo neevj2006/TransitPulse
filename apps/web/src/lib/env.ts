@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const publicEnvSchema = z.object({
+  NEXT_PUBLIC_DATA_MODE: z.enum(["demo", "live"]).optional(),
   NEXT_PUBLIC_APP_ENV: z
     .enum(["development", "preview", "production"])
     .default("development"),
@@ -17,9 +18,14 @@ const publicEnvSchema = z.object({
 });
 
 export const publicEnv = publicEnvSchema.parse({
+  NEXT_PUBLIC_DATA_MODE: process.env.NEXT_PUBLIC_DATA_MODE,
   NEXT_PUBLIC_APP_ENV: process.env.NEXT_PUBLIC_APP_ENV,
   NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
   NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
   NEXT_PUBLIC_MAP_STYLE_LIGHT_URL: process.env.NEXT_PUBLIC_MAP_STYLE_LIGHT_URL,
   NEXT_PUBLIC_MAP_STYLE_DARK_URL: process.env.NEXT_PUBLIC_MAP_STYLE_DARK_URL,
 });
+
+export const isDemo =
+  publicEnv.NEXT_PUBLIC_DATA_MODE === "demo" ||
+  (!publicEnv.NEXT_PUBLIC_DATA_MODE && !publicEnv.NEXT_PUBLIC_API_BASE_URL);

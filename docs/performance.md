@@ -8,13 +8,13 @@ pages that need it.
 
 Measured on the production build against a local desktop Chromium audit:
 
-| Measure | Budget | Rationale |
-| --- | ---: | --- |
-| Lighthouse performance score | 85 or higher | Ensures the public shell remains responsive. |
-| First Contentful Paint | 2.0 seconds or less | Riders should see clear context quickly. |
-| Largest Contentful Paint | 4.0 seconds or less | The primary page content should render promptly even while data services reconnect. |
-| Total Blocking Time | 200 ms or less | Search and navigation should remain usable. |
-| Cumulative Layout Shift | 0.10 or less | Arrival and trust information must not jump unexpectedly. |
+| Measure                      |              Budget | Rationale                                                                           |
+| ---------------------------- | ------------------: | ----------------------------------------------------------------------------------- |
+| Lighthouse performance score |        85 or higher | Ensures the public shell remains responsive.                                        |
+| First Contentful Paint       | 2.0 seconds or less | Riders should see clear context quickly.                                            |
+| Largest Contentful Paint     | 4.0 seconds or less | The primary page content should render promptly even while data services reconnect. |
+| Total Blocking Time          |      200 ms or less | Search and navigation should remain usable.                                         |
+| Cumulative Layout Shift      |        0.10 or less | Arrival and trust information must not jump unexpectedly.                           |
 
 These are review budgets, not a claim that a localhost audit predicts every
 device, network, map-tile, or backend condition. Production and replay checks

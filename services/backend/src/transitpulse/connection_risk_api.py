@@ -144,5 +144,14 @@ async def transfer_risk(
     }
     # The key includes every input and a minute-bucketed as-of cutoff. This
     # makes the short cache safe while avoiding needless duplicate DB queries.
+    expired = [
+        key
+        for key, entry in request.app.state.transfer_risk_cache.items()
+        if entry[0] <= monotonic()
+    ]
+    for key in expired:
+        request.app.state.transfer_risk_cache.pop(key, None)
+    while len(request.app.state.transfer_risk_cache) >= 1000:
+        request.app.state.transfer_risk_cache.pop(next(iter(request.app.state.transfer_risk_cache)))
     request.app.state.transfer_risk_cache[cache_key] = (monotonic() + 60, payload)
     return payload

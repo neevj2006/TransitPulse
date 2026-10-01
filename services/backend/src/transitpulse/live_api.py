@@ -126,18 +126,30 @@ async def health(request: Request) -> dict[str, object]:
 async def events(
     request: Request, route_id: str | None = None, stop_id: str | None = None
 ) -> StreamingResponse:
+    cursor = request.headers.get("last-event-id", "0")
+    if not cursor.isascii() or not cursor.isdecimal() or len(cursor) > 18:
+        raise HTTPException(
+            422, detail={"code": "INVALID_REQUEST", "message": "Invalid event cursor."}
+        )
+    initial_event = int(cursor)
+    client = request.client.host if request.client else "unknown"
     async with request.app.state.sse_lock:
-        if request.app.state.sse_connections >= request.app.state.settings.sse_connection_limit:
+        if (
+            request.app.state.sse_connections >= request.app.state.settings.sse_connection_limit
+            or request.app.state.sse_clients.get(client, 0)
+            >= request.app.state.settings.sse_client_connection_limit
+        ):
             raise HTTPException(
                 429,
                 detail={"code": "SSE_CONNECTION_LIMIT", "message": "Too many live connections."},
             )
         request.app.state.sse_connections += 1
+        request.app.state.sse_clients[client] = request.app.state.sse_clients.get(client, 0) + 1
 
     async def heartbeat():
         broker: EventBroker = request.app.state.event_broker
         cache: RedisStateStore | None = request.app.state.redis_state_store
-        last_event = int(request.headers.get("last-event-id", "0"))
+        last_event = initial_event
         heartbeat_at = asyncio.get_running_loop().time()
 
         def heartbeat() -> str:
@@ -165,8 +177,13 @@ async def events(
                     except TimeoutError:
                         yield heartbeat()
         finally:
-            async with request.app.state.sse_lock:
-                request.app.state.sse_connections -= 1
+            # No await: release both counters even inside a cancelled stream task.
+            request.app.state.sse_connections -= 1
+            remaining = request.app.state.sse_clients[client] - 1
+            if remaining:
+                request.app.state.sse_clients[client] = remaining
+            else:
+                del request.app.state.sse_clients[client]
 
     return StreamingResponse(
         heartbeat(),

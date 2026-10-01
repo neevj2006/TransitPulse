@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "test", "preview", "production"] = "development"
     database_url: str | None = None
+    api_database_url: str | None = None
     redis_url: RedisDsn | None = None
     raw_snapshot_path: Path = Path("../../data/raw")
     raw_snapshot_retention_hours: int = 6
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     alerts_url: str = "https://cdn.mbta.com/realtime/Alerts.pb"
     allowed_origins: tuple[str, ...] = ("http://localhost:3000",)
     sse_connection_limit: int = 20
+    sse_client_connection_limit: int = 3
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
 

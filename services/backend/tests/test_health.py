@@ -7,6 +7,17 @@ from transitpulse.app import create_app
 from transitpulse.config import Settings
 
 
+def test_api_uses_separate_read_only_database_configuration() -> None:
+    settings = Settings(
+        environment="test",
+        database_url="postgresql+asyncpg://writer@localhost/app",
+        api_database_url="postgresql+asyncpg://reader@localhost/app",
+        redis_url=None,
+    )
+    app = create_app(settings, probes=[])
+    assert app.state.schedule_engine.url.username == "reader"
+
+
 class HealthyProbe:
     name = "dependency"
 
@@ -38,6 +49,18 @@ async def test_liveness(client: AsyncClient) -> None:
         "service": "transitpulse-backend",
         "status": "live",
     }
+
+
+async def test_invalid_sse_cursor_does_not_consume_connection_capacity(client: AsyncClient) -> None:
+    for cursor in ("invalid", "-1", "9" * 100):
+        response = await client.get("/api/v1/live/events", headers={"Last-Event-ID": cursor})
+        assert response.status_code == 422
+    assert client._transport.app.state.sse_connections == 0  # type: ignore[attr-defined]
+
+
+async def test_untrusted_request_id_is_replaced(client: AsyncClient) -> None:
+    response = await client.get("/health/live", headers={"X-Request-ID": "x" * 1000})
+    assert len(response.headers["X-Request-ID"]) == 36
 
 
 async def test_metrics_exposes_request_measurements(client: AsyncClient) -> None:

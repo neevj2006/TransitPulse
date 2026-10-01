@@ -13,6 +13,8 @@ class Metrics:
             list
         )
         self._lock = Lock()
+        self._totals: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[int, float]] = {}
+        self._gauges: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
 
     @staticmethod
     def _labels(labels: dict[str, str] | None) -> tuple[tuple[str, str], ...]:
@@ -39,22 +41,32 @@ class Metrics:
 
     def observe(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         with self._lock:
-            samples = self._histograms[name, self._labels(labels)]
+            key = (name, self._labels(labels))
+            count, total = self._totals.get(key, (0, 0.0))
+            self._totals[key] = (count + 1, total + value)
+            samples = self._histograms[key]
             samples.append(value)
             del samples[:-1_000]
+
+    def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
+        with self._lock:
+            self._gauges[name, self._labels(labels)] = value
 
     def render(self) -> str:
         lines: list[str] = []
         with self._lock:
+            for (name, labels), value in sorted(self._gauges.items()):
+                lines.append(f"{name}{self._render_labels(labels)} {value:g}")
             for (name, labels), value in sorted(self._counters.items()):
                 lines.append(f"{name}{self._render_labels(labels)} {value:g}")
             for (name, labels), samples in sorted(self._histograms.items()):
                 if samples:
                     suffix = self._render_labels(labels)
+                    count, total = self._totals[name, labels]
                     lines.extend(
                         (
-                            f"{name}_count{suffix} {len(samples)}",
-                            f"{name}_sum{suffix} {sum(samples):.6f}",
+                            f"{name}_count{suffix} {count}",
+                            f"{name}_sum{suffix} {total:.6f}",
                             f"{name}_max{suffix} {max(samples):.6f}",
                         )
                     )

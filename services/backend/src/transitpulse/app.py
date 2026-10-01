@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import QueuePool
 
 from transitpulse.analytics_api import router as analytics_router
 from transitpulse.cache import RedisProbe, RedisStateStore
@@ -26,14 +27,16 @@ from transitpulse.metrics import Metrics
 from transitpulse.realtime import CurrentState
 from transitpulse.schedule.api import router as schedule_router
 from transitpulse.schedule.repository import load_active_schedule
+from transitpulse.telemetry import instrument_database
 
 logger = structlog.get_logger()
 
 
 def build_probes(settings: Settings) -> list[Probe]:
     probes: list[Probe] = []
-    if settings.database_url:
-        probes.append(DatabaseProbe(settings.database_url))
+    database_url = settings.api_database_url or settings.database_url
+    if database_url:
+        probes.append(DatabaseProbe(database_url))
     if settings.redis_url:
         probes.append(RedisProbe(str(settings.redis_url)))
     return probes
@@ -71,8 +74,10 @@ def create_app(
     app.state.pollers = {}
     app.state.event_broker = EventBroker()
     app.state.schedule_engine = (
-        create_async_engine(application_settings.database_url)
-        if application_settings.database_url
+        create_async_engine(
+            application_settings.api_database_url or application_settings.database_url or ""
+        )
+        if application_settings.api_database_url or application_settings.database_url
         else None
     )
     app.state.redis_state_store = (
@@ -88,8 +93,11 @@ def create_app(
     app.state.transfer_risk_cache = {}
     app.state.api_latencies_ms = []
     app.state.sse_connections = 0
+    app.state.sse_clients = {}
     app.state.sse_lock = asyncio.Lock()
     app.state.metrics = Metrics()
+    if app.state.schedule_engine:
+        instrument_database(app.state.schedule_engine, app.state.metrics)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(application_settings.allowed_origins),
@@ -130,7 +138,14 @@ def create_app(
     async def request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        candidate = request.headers.get("X-Request-ID", "")
+        request_id = (
+            candidate
+            if 0 < len(candidate) <= 64
+            and candidate.isascii()
+            and all(c.isalnum() or c in "-_" for c in candidate)
+            else str(uuid4())
+        )
         request.state.request_id = request_id
         client = request.client.host if request.client else "unknown"
         now = monotonic()
@@ -174,10 +189,16 @@ def create_app(
         elapsed_seconds = monotonic() - now
         route = request.scope.get("route")
         metric_path = getattr(route, "path", "unmatched")
+        metric_method = (
+            request.method
+            if request.method
+            in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+            else "OTHER"
+        )
         request.app.state.metrics.increment(
             "transitpulse_http_requests_total",
             {
-                "method": request.method,
+                "method": metric_method,
                 "path": metric_path,
                 "status": str(response.status_code),
             },
@@ -185,7 +206,7 @@ def create_app(
         request.app.state.metrics.observe(
             "transitpulse_http_request_duration_seconds",
             elapsed_seconds,
-            {"method": request.method, "path": metric_path},
+            {"method": metric_method, "path": metric_path},
         )
         logger.info(
             "request_completed",
@@ -211,6 +232,15 @@ def create_app(
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics(request: Request) -> Response:
+        engine = request.app.state.schedule_engine
+        if engine and isinstance(engine.pool, QueuePool):
+            request.app.state.metrics.gauge("transitpulse_database_pool_size", engine.pool.size())
+            request.app.state.metrics.gauge(
+                "transitpulse_database_pool_checked_out", engine.pool.checkedout()
+            )
+        request.app.state.metrics.gauge(
+            "transitpulse_sse_connections", request.app.state.sse_connections
+        )
         return Response(request.app.state.metrics.render(), media_type="text/plain; version=0.0.4")
 
     _ = metrics

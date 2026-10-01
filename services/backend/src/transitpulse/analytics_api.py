@@ -44,7 +44,7 @@ async def reliability(
     async with engine.connect() as connection:
         result = await connection.execute(
             text(f"""SELECT * FROM reliability_aggregates
-        WHERE {where} ORDER BY service_date DESC, hour"""),
+        WHERE {where} ORDER BY service_date DESC, hour DESC LIMIT 1000"""),
             parameters,
         )
         rows = [dict(row) for row in result.mappings()]
@@ -57,5 +57,6 @@ async def reliability(
             "metric_definition": "2026-08-03.1",
             "minimum_sample_size": 20,
             "minimum_coverage": 0.8,
+            "row_limit": 1000,
         },
     }
